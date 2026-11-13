@@ -81,6 +81,7 @@ select.inp{text-align:left;width:auto;min-width:120px}
 h2.mt{margin-top:16px}
 .apperr{color:var(--err);font-weight:600;margin:0 0 8px}
 .btn{font:inherit;font-weight:600;color:#fff;background:var(--acc);border:1px solid var(--acc);border-radius:6px;padding:6px 12px;cursor:pointer}.btn.ghost{background:#fff;color:var(--acc)}.btn:disabled{opacity:.45;cursor:default}
+a.btn{display:inline-block;text-decoration:none}.vawtbox{border:1px solid #d6dde6;border-left:4px solid var(--acc);border-radius:6px;padding:8px 12px;margin:8px 0 12px;background:#f7f9fc}.vawtbox p{margin:4px 0}
 .locrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:6px 0 10px}.locrow label{display:flex;align-items:center;gap:6px}.locrow .inp{width:100px}
 h3.sub{font-size:14px;margin:16px 0 4px}#pfill{margin-top:4px}.grid.sun{width:auto;min-width:420px}.grid.sun td{text-align:right}
 body.modal{overflow:hidden}
@@ -1104,7 +1105,7 @@ window.TCO_HELP = {
       ['Днів', 'скільки днів у сезоні; разом мають бути 365.'],
       ['Години без світла, год/добу', 'скільки годин на добу в середньому немає світла в цьому сезоні.'],
       ['Найдовше одиночне відключення', 'найдовший безперервний період без світла. Від нього залежить, якої ємності потрібна батарея.'],
-      ['Генерація 1 вітрогенератора за сезон', 'скільки кВт·год дає одна турбіна за весь сезон у місці встановлення. Візьміть із калькулятора VAWT Advisor або з даних виробника для цієї локації.'],
+      ['Генерація 1 вітрогенератора за сезон', 'скільки кВт·год дає одна турбіна за весь сезон у місці встановлення. Візьміть із калькулятора VAWT Advisor (кнопки біля поля 52 відкривають його і підставляють результат) або з даних виробника для цієї локації.'],
       ['Генерація PV на 1 кВтп за сезон', 'рахується сама з літньої генерації (поле 101) і частки сезону.'],
       ['Частка PV від літньої генерації', 'скільки сонячної енергії дає сезон порівняно з літом (літо завжди 100%). Заповнюється кнопкою Open-Meteo в картці «Локація об’єкта» або вручну.'],
       ['Коефіцієнт споживання сезону', 'наскільки споживання в сезоні відрізняється від звичайного: 120% означає на п’яту частину більше (опалення, освітлення), 85% – менше.']
@@ -1898,6 +1899,7 @@ window.TCO_HELP = {
         if (notes.length) html += '<ul class="notes">' + notes.join('') + '</ul>';
         continue;
       }
+      if (row.r === 52) html += '<div id="vawtbox" class="vawtbox"></div>';
       if (c.B) {
         var isText = c.B.k === 'i' && inputs['B' + row.r].kind === 'text';
         html += '<div class="row' + (isText ? ' trow' : '') + '" id="row' + row.r + '"><label><small>' + row.r + '</small>' + labelHtml(row.r) + '</label><div class="ctl">' + cellHtml(row.r, 'B', c.B, !!c.C) +
@@ -2175,6 +2177,53 @@ window.TCO_HELP = {
   }
   function num2(v) { return typeof v === 'number' && isFinite(v) ? v : 0; }
 
+  // ---------- VAWT Advisor: посилання і автопідстановка ----------
+  // Обидва застосунки на vlgook.github.io мають спільне сховище браузера.
+  // VAWT Advisor після кожного «Розрахувати» записує результат під ключем tco_vawt_last.
+  var VAWT_URL = 'https://vlgook.github.io/vawt-advisor/', VAWT_KEY = 'tco_vawt_last', vawtMsg = '';
+  function vawtRead() {
+    try {
+      var o = JSON.parse(localStorage.getItem(VAWT_KEY) || 'null');
+      if (o && o.v === 1 && o.q && o.q.length === 4 && o.q.every(function (x) { return typeof x === 'number' && isFinite(x) && x >= 0 && x < 1e7; })) return o;
+    } catch (e) {}
+    return null;
+  }
+  function vawtLink() { return VAWT_URL + (locValid(loc) ? '?lat=' + loc.lat + '&lon=' + loc.lon : ''); }
+  function buildVawt() {
+    var host = document.getElementById('vawtbox'); if (!host) return;
+    host.innerHTML = '<p><b>Генерація з VAWT Advisor.</b> Advisor рахує, скільки дасть турбіна Dospel Dragon у конкретному місці за кожен сезон. ' +
+      'Відкрийте його, у блоці швидкості вітру натисніть 📍 і візьміть вітер з карти (точку об’єкта з картки «Локація» вже буде позначено), потім «Розрахувати» і поверніться сюди.</p>' +
+      '<div class="locrow"><a class="btn" id="vopen" target="_blank" rel="noopener">Відкрити VAWT Advisor ↗</a>' +
+      '<button type="button" class="btn" id="vfill" disabled>Підставити з VAWT Advisor</button></div>' +
+      '<p class="small" id="vmsg" aria-live="polite"></p>';
+    document.getElementById('vfill').addEventListener('click', fillVawt);
+    updateVawt();
+  }
+  function vawtWhen(iso) { var d = new Date(iso); return isFinite(d) ? d.toLocaleDateString('uk-UA') + ' ' + d.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }) : ''; }
+  function updateVawt() {
+    var a = document.getElementById('vopen'); if (!a) return;
+    a.href = vawtLink();
+    var r = vawtRead(), b = document.getElementById('vfill'), m = document.getElementById('vmsg');
+    b.disabled = !r;
+    if (location.protocol === 'file:') { m.textContent = 'Автопідстановка працює лише на сайті vlgook.github.io/tco-backup-power. У файлі з диска перенесіть сезонну генерацію з Advisor у таблицю сезонів (поля E15–E18) вручну.'; b.disabled = true; return; }
+    if (!r) { m.textContent = 'У цьому браузері ще немає розрахунку VAWT Advisor. Після «Розрахувати» в Advisor тут з’явиться його результат.'; return; }
+    var q = r.q.map(function (x) { return fmtVal(Math.round(x), '#,##0'); }).join(' / ');
+    var where = typeof r.lat === 'number' && typeof r.lon === 'number' ? coord(r.lat) + ', ' + coord(r.lon) : 'точку на карті не обирали';
+    var far = typeof r.lat === 'number' && locValid(loc) && (Math.abs(r.lat - loc.lat) > 0.1 || Math.abs(r.lon - loc.lon) > 0.15);
+    m.textContent = (vawtMsg ? vawtMsg + ' ' : '') + 'Останній розрахунок Advisor (' + vawtWhen(r.at) + '): ' + String(r.model || '') + ', ' + fmtVal(r.p_kw, '0.0#') + ' кВт, ' + (typeof r.v_mean === 'number' ? 'вітер ' + fmtVal(r.v_mean, '0.0') + ' м/с, ' : '') + where +
+      '. Генерація однієї турбіни, кВт·год: зима / весна / літо / осінь – ' + q + '.' + (far ? ' Увага: точка в Advisor інша, ніж у картці «Локація».' : '');
+  }
+  function fillVawt() {
+    var r = vawtRead(); if (!r) return;
+    ['E15', 'E16', 'E17', 'E18'].forEach(function (a, i) { user[a] = Math.round(r.q[i]); });
+    if (r.model) user.B52 = String(r.model).slice(0, 80);
+    if (typeof r.p_kw === 'number' && r.p_kw > 0) user.B53 = Math.round(r.p_kw * 100) / 100;
+    vawtMsg = 'Підставлено в таблицю сезонів і поля 52–53.';
+    recompute(); save(); fillInputs(); refresh();
+  }
+  window.addEventListener('storage', function (e) { if (e.key === VAWT_KEY) { vawtMsg = ''; updateVawt(); } });
+  window.addEventListener('focus', updateVawt);
+
   // ---------- графіки (SVG) ----------
   var PAL = ['#0072B2', '#E69F00', '#009E73', '#D55E00', '#CC79A7', '#56B4E9', '#333333'];
   var DASH = ['', '7 4', '2 3', '10 3 2 3', '', '7 4', '2 3'];
@@ -2389,7 +2438,7 @@ window.TCO_HELP = {
     });
     Object.keys(inputs).forEach(function (a) { var m = inputs[a]; if (m.el) m.el.classList.toggle('bad', !isDerived(a) && m.kind === 'num' && typeof user[a] === 'string'); });
     if (sched.mode === 'schedule') fillInputs(DERIVED);
-    updateSched(); updateLoc(); updatePV();
+    updateSched(); updateLoc(); updatePV(); updateVawt();
     drawStatus(); drawResult(); drawCharts(); drawDetails();
   }
 
@@ -2447,7 +2496,7 @@ window.TCO_HELP = {
     function fix(t) { FIX.forEach(function (f) { t = t.replace(f[0], f[1]); }); return t; }
     document.getElementById('gloss').innerHTML = '<h2>Словник термінів</h2><dl class="gloss">' + H.glossary.map(function (g) { return '<dt>' + esc(g[0]) + '</dt><dd>' + esc(g[1]) + '</dd>'; }).join('') + '</dl>';
     document.getElementById('metod').innerHTML = '<h2>Методика розрахунку</h2>' + M.metod.concat(METOD_APP).map(function (p, i) { return i === 0 ? '' : (p.b ? '<h3>' + esc(fix(p.t)) + '</h3>' : '<p>' + esc(fix(p.t)) + '</p>'); }).join('');
-    buildInputs(); restore(); buildSched(); buildLoc(); fillInputs(); refresh();
+    buildInputs(); buildVawt(); restore(); buildSched(); buildLoc(); fillInputs(); refresh();
     syncHeader();
     // вікно-попередження при старті: кнопка стає активною через 10 секунд
     (function () {
