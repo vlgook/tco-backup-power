@@ -2063,11 +2063,13 @@ window.TCO_HELP = {
     if (!map) {
       map = L.map('mapbox', { worldCopyJump: true }).setView([48.6, 31.2], 6);
       // підкладки по черзі: якщо поточна не віддає тайли, вмикається наступна
-      var TILES = [
-        ['https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 19, attribution: '© учасники OpenStreetMap © CARTO' }],
-        ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles © Esri' }],
-        ['https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© учасники OpenStreetMap' }]
-      ], ti = -1, layer = null, tOk = 0, tBad = 0;
+      // На сайті (http/https) OSM працює, а CARTO без ключа малює водяний знак «API KEY REQUIRED».
+      // Для локального файлу (file://) OSM відповідає 403, тому там першою йде Esri.
+      var T_OSM = ['https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© учасники OpenStreetMap' }],
+        T_ESRI = ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles © Esri' }],
+        T_CARTO = ['https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 19, attribution: '© учасники OpenStreetMap © CARTO' }];
+      var TILES = /^https?:$/.test(location.protocol) ? [T_OSM, T_ESRI] : [T_ESRI, T_OSM, T_CARTO],
+        ti = -1, layer = null, tOk = 0, tBad = 0;
       var nextTiles = function () {
         if (layer) map.removeLayer(layer);
         ti++; tOk = 0; tBad = 0;
