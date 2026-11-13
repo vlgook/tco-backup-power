@@ -2210,7 +2210,7 @@ window.TCO_HELP = {
     var where = typeof r.lat === 'number' && typeof r.lon === 'number' ? 'для ' + coord(r.lat) + ', ' + coord(r.lon) : 'без точки на карті (вітер введено вручну)';
     var far = typeof r.lat === 'number' && locValid(loc) && (Math.abs(r.lat - loc.lat) > 0.1 || Math.abs(r.lon - loc.lon) > 0.15);
     m.textContent = (vawtMsg ? vawtMsg + ' ' : '') + 'Розрахунок Advisor від ' + vawtWhen(r.at) + ' ' + where + ': ' + String(r.model || '') + ', ' + fmtVal(r.p_kw, '0.0#') + ' кВт' +
-      (typeof r.v_mean === 'number' ? ', середній вітер на висоті турбіни ' + fmtVal(r.v_mean, '0.0') + ' м/с' : '') + '.' + (far ? ' Увага: точка в Advisor інша, ніж у цій картці.' : '');
+      (typeof r.v_mean === 'number' ? ', середній вітер ' + fmtVal(r.v_mean, '0.0') + ' м/с на висоті 10 м' : '') + (typeof r.h === 'number' ? ', вісь турбіни на висоті ' + fmtVal(r.h, '0.##') + ' м' : '') + '.' + (far ? ' Увага: точка в Advisor інша, ніж у цій картці.' : '');
     var cur = ['E15', 'E16', 'E17', 'E18'].map(function (x) { return num2(val(D, x)); }), y = r.q[0] + r.q[1] + r.q[2] + r.q[3];
     var h = '<tr class="head"><th class="lab">Сезон</th><th>VAWT Advisor, кВт·год на 1 турбіну</th><th>Частка від року</th><th>Зараз у розрахунку, кВт·год</th></tr>';
     for (var i = 0; i < 4; i++) h += '<tr><th class="lab">' + SNAMES[i] + '</th><td>' + fmtVal(r.q[i], '#,##0') + '</td><td>' + fmtVal(y > 0 ? r.q[i] / y : 0, '0%') + '</td><td>' + fmtVal(cur[i], '#,##0') + '</td></tr>';
