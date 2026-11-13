@@ -81,8 +81,7 @@ select.inp{text-align:left;width:auto;min-width:120px}
 h2.mt{margin-top:16px}
 .apperr{color:var(--err);font-weight:600;margin:0 0 8px}
 .btn{font:inherit;font-weight:600;color:#fff;background:var(--acc);border:1px solid var(--acc);border-radius:6px;padding:6px 12px;cursor:pointer}.btn.ghost{background:#fff;color:var(--acc)}.btn:disabled{opacity:.45;cursor:default}
-a.btn{display:inline-block;text-decoration:none}.vawtbox{border:1px solid #d6dde6;border-left:4px solid var(--acc);border-radius:6px;padding:8px 12px;margin:8px 0 12px;background:#f7f9fc}.vawtbox p{margin:4px 0}
-.locrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:6px 0 10px}.locrow label{display:flex;align-items:center;gap:6px}.locrow .inp{width:100px}
+a.btn{display:inline-block;text-decoration:none}.locrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:6px 0 10px}.locrow label{display:flex;align-items:center;gap:6px}.locrow .inp{width:100px}
 h3.sub{font-size:14px;margin:16px 0 4px}#pfill{margin-top:4px}.grid.sun{width:auto;min-width:420px}.grid.sun td{text-align:right}
 body.modal{overflow:hidden}
 .mapdlg{position:fixed;inset:0;background:rgba(20,28,38,.55);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px}.mapdlg[hidden]{display:none}
@@ -1105,9 +1104,9 @@ window.TCO_HELP = {
       ['Днів', 'скільки днів у сезоні; разом мають бути 365.'],
       ['Години без світла, год/добу', 'скільки годин на добу в середньому немає світла в цьому сезоні.'],
       ['Найдовше одиночне відключення', 'найдовший безперервний період без світла. Від нього залежить, якої ємності потрібна батарея.'],
-      ['Генерація 1 вітрогенератора за сезон', 'скільки кВт·год дає одна турбіна за весь сезон у місці встановлення. Візьміть із калькулятора VAWT Advisor (кнопки біля поля 52 відкривають його і підставляють результат) або з даних виробника для цієї локації.'],
+      ['Генерація 1 вітрогенератора за сезон', 'скільки кВт·год дає одна турбіна за весь сезон у місці встановлення. Візьміть із калькулятора VAWT Advisor (блок у картці «Локація об’єкта») або з даних виробника для цієї локації.'],
       ['Генерація PV на 1 кВтп за сезон', 'рахується сама з літньої генерації (поле 101) і частки сезону.'],
-      ['Частка PV від літньої генерації', 'скільки сонячної енергії дає сезон порівняно з літом (літо завжди 100%). Заповнюється кнопкою Open-Meteo в картці «Локація об’єкта» або вручну.'],
+      ['Частка PV від літньої генерації', 'скільки сонячної енергії дає сезон порівняно з літом (літо завжди 100%). Заповнюється з блоку Open-Meteo в картці «Локація об’єкта» або вручну.'],
       ['Коефіцієнт споживання сезону', 'наскільки споживання в сезоні відрізняється від звичайного: 120% означає на п’яту частину більше (опалення, освітлення), 85% – менше.']
     ],
     equipment: 'Скільки одиниць кожного обладнання в кожному з семи сценаріїв. 0 означає, що його в сценарії немає. Змінюючи кількість, ви порівнюєте конфігурації, наприклад 5 чи 8 батарейних модулів. Батареям, панелям і вітрогенератору потрібен хоча б один інвертор: вони працюють через нього.',
@@ -1899,7 +1898,6 @@ window.TCO_HELP = {
         if (notes.length) html += '<ul class="notes">' + notes.join('') + '</ul>';
         continue;
       }
-      if (row.r === 52) html += '<div id="vawtbox" class="vawtbox"></div>';
       if (c.B) {
         var isText = c.B.k === 'i' && inputs['B' + row.r].kind === 'text';
         html += '<div class="row' + (isText ? ' trow' : '') + '" id="row' + row.r + '"><label><small>' + row.r + '</small>' + labelHtml(row.r) + '</label><div class="ctl">' + cellHtml(row.r, 'B', c.B, !!c.C) +
@@ -1941,7 +1939,9 @@ window.TCO_HELP = {
     { t: 'Локація об’єкта', b: 1 },
     { t: 'Якщо на вкладці «Вхідні дані» обрано координати, схід і захід сонця для кожного сезону рахуються астрономічно (алгоритм NOAA, з урахуванням рефракції) для кожного дня сезону і усереднюються. Час – київський, з переходом на літній. Без координат використовуються значення за умовчанням для Києва. Генерацію панелей за сезон сама локація не змінює: її підставляє кнопка Open-Meteo, описана нижче.', b: 0 },
     { t: 'Генерація панелей за даними Open-Meteo', b: 1 },
-    { t: 'Для обраної точки застосунок завантажує з Open-Meteo погодинне сонячне опромінення на площину панелей заданого нахилу й азимуту (global tilted irradiance) за 2015–2024 роки з кліматичного архіву ERA5. Опромінення за кожен сезон підсумовується і усереднюється за роками; поділене на 1000 Вт/м² (стандартні умови випробування панелей) і помножене на коефіцієнт продуктивності, воно дає кВт·год на 1 кВт панелей. Літня генерація підставляється в поле 101, генерація інших сезонів – як частки від літа. Пропущені години (якщо їх менше 10%) заповнюються середнім сезону. Точність ERA5 для сонця – близько ±10% за рік; хмарність окремого року може відрізнятися сильніше.', b: 0 },
+    { t: 'Для обраної точки застосунок завантажує з Open-Meteo погодинне сонячне опромінення на площину панелей заданого нахилу й азимуту (global tilted irradiance) за 2015–2024 роки з кліматичного архіву ERA5. Опромінення за кожен сезон підсумовується і усереднюється за роками; поділене на 1000 Вт/м² (стандартні умови випробування панелей) і помножене на коефіцієнт продуктивності, воно дає кВт·год на 1 кВт панелей. Кнопка «Використати в розрахунку» записує літню генерацію в поле 101, а генерацію інших сезонів – як частки від літа. Пропущені години (якщо їх менше 10%) заповнюються середнім сезону. Точність ERA5 для сонця – близько ±10% за рік; хмарність окремого року може відрізнятися сильніше.', b: 0 },
+    { t: 'Генерація вітрогенератора з VAWT Advisor', b: 1 },
+    { t: 'Сезонну генерацію однієї турбіни рахує калькулятор VAWT Advisor (vlgook.github.io/vawt-advisor): паспортні криві потужності Dospel Dragon, середня швидкість вітру ERA5 для точки, розподіл Вейбулла і сезонні коефіцієнти Advisor. Обидва калькулятори працюють на одному сайті, тому останній розрахунок Advisor видно в картці «Локація об’єкта». Кнопка «Використати в розрахунку» записує генерацію чотирьох сезонів у таблицю сезонів, а модель і потужність – у поля 52–53. Ціни турбіни, монтажу й обслуговування не змінюються.', b: 0 },
     { t: 'Кожна типова доба прораховується кроком 15 хвилин для кожного сценарію: навантаження за піковими вікнами, PV між сходом і заходом сонця, вітер рівномірно, заряд і розряд АКБ з обмеженнями потужності, запуск ДГ на порозі SoC і його зупинка, дозаряд від мережі в паузах. Доба повторюється кілька разів поспіль, тому батарея входить у неї з тим зарядом, з яким вийшла з попередньої.', b: 0 },
     { t: 'З добових результатів складаються річні: енергія з мережі, паливо, мотогодини, цикли АКБ, простій і втрати від нього, PV замість мережі. Далі працюють ті самі формули TCO, ROI, замін обладнання, інтенсивності по роках і блекаутів, що й у режимі часток. Нестача ємності рахується на найважчому відключенні з ємністю АКБ на кінець строку і гарантованою часткою вітру та PV. Години без світла, найдовше відключення і частки пікових та світлих годин у таблицях показуються розрахованими з графіка.', b: 0 }
   ];
@@ -2025,7 +2025,7 @@ window.TCO_HELP = {
       '<label>Широта <input class="inp" id="llat" inputmode="decimal" aria-label="Широта" placeholder="50,45"></label>' +
       '<label>Довгота <input class="inp" id="llon" inputmode="decimal" aria-label="Довгота" placeholder="30,52"></label>' +
       '<button type="button" class="btn ghost" id="lreset">За умовчанням (Київ)</button><span class="small" id="lnote"></span></div>' +
-      '<div class="tblwrap"><table class="grid sun" id="suntable"></table></div><div id="pvbox"></div>';
+      '<div class="tblwrap"><table class="grid sun" id="suntable"></table></div><div id="pvbox"></div><div id="vawtbox"></div>';
     var la = document.getElementById('llat'), lo = document.getElementById('llon');
     la.value = locValid(loc) ? coord(loc.lat) : ''; lo.value = locValid(loc) ? coord(loc.lon) : '';
     function fromInputs() {
@@ -2037,7 +2037,7 @@ window.TCO_HELP = {
     la.addEventListener('change', fromInputs); lo.addEventListener('change', fromInputs);
     document.getElementById('lreset').addEventListener('click', function () { loc = null; buildLoc(); recompute(); save(); refresh(); });
     document.getElementById('bmap').addEventListener('click', openMap);
-    buildPV();
+    buildPV(); buildVawt();
   }
   function parseCoord(s) { var t = String(s).replace(/[\s °]/g, '').replace(',', '.'); return /^[-+]?(\d+\.?\d*|\.\d+)$/.test(t) ? parseFloat(t) : NaN; }
   function updateLoc() {
@@ -2108,7 +2108,7 @@ window.TCO_HELP = {
   function buildPV() {
     var host = document.getElementById('pvbox'); if (!host) return;
     host.innerHTML = '<h3 class="sub">Генерація сонячних панелей у цій точці</h3>' +
-      '<p class="small">Застосунок бере з Open-Meteo погодинне сонячне опромінення за 2015–2024 роки (кліматичний архів ERA5) для обраної точки й нахилу панелей і рахує, скільки дасть 1 кВт панелей за кожен сезон. Кнопка «Підставити» переносить результат у поле 101 і в частки сезонів. Потрібен інтернет; завантаження займає кілька секунд.</p>' +
+      '<p class="small">Застосунок бере з Open-Meteo погодинне сонячне опромінення за 2015–2024 роки (кліматичний архів ERA5) для обраної точки й нахилу панелей і рахує, скільки дасть 1 кВт панелей за кожен сезон. Кнопка «Використати в розрахунку» переносить сезонну генерацію в таблицю сезонів. Потрібен інтернет; завантаження займає кілька секунд.</p>' +
       '<div class="locrow">' +
       '<label title="0° – панелі лежать горизонтально, 90° – вертикально на фасаді. Для України на даху зазвичай 30–40°">Кут нахилу, ° <input class="inp" id="ptilt" inputmode="decimal" aria-label="Кут нахилу панелей, градусів"></label>' +
       '<label title="0° – на південь, –90° – на схід, 90° – на захід">Орієнтація (азимут), ° <input class="inp" id="paz" inputmode="decimal" aria-label="Азимут панелей, градусів"></label>' +
@@ -2116,7 +2116,7 @@ window.TCO_HELP = {
       '<button type="button" class="btn" id="pget">Отримати дані Open-Meteo</button></div>' +
       '<p class="small">Кут нахилу: 0° – панелі лежать, 90° – стоять на фасаді; на даху зазвичай 30–40°. Азимут: 0° – на південь, –90° – на схід, 90° – на захід. Коефіцієнт продуктивності – яка частка сонячної енергії доходить до споживача після втрат від нагріву, в інверторі, кабелях, від пилу і снігу; типово 75–85%.</p>' +
       '<p class="small" id="pmsg" aria-live="polite"></p><div class="tblwrap"><table class="grid sun" id="pvtable"></table></div>' +
-      '<p><button type="button" class="btn" id="pfill" disabled>Підставити в поле 101 і частки сезонів</button></p>' +
+      '<p><button type="button" class="btn" id="pfill" disabled>Використати в розрахунку</button></p>' +
       '<p class="small">Дані: ERA5 через Open-Meteo.com (ліцензія CC BY 4.0). Безкоштовний доступ Open-Meteo – для некомерційного використання.</p>';
     var t = document.getElementById('ptilt'), a = document.getElementById('paz'), p = document.getElementById('ppr');
     t.value = numIn(pvset.tilt); a.value = numIn(pvset.az); p.value = numIn(Math.round(pvset.pr * 1000) / 10);
@@ -2154,7 +2154,7 @@ window.TCO_HELP = {
     var s = pvSeason(); if (!s || !pvMatches() || !(s[2] > 0)) return;
     user.B101 = Math.round(s[2]);
     user.G15 = Math.round(s[0] / s[2] * 1000) / 1000; user.G16 = Math.round(s[1] / s[2] * 1000) / 1000; user.G18 = Math.round(s[3] / s[2] * 1000) / 1000;
-    pvMsg = 'Підставлено: ' + fmtVal(user.B101, '#,##0') + ' кВт·год за літо, частки зима ' + fmtVal(user.G15, '0%') + ', весна ' + fmtVal(user.G16, '0%') + ', осінь ' + fmtVal(user.G18, '0%') + '.';
+    pvMsg = 'Використано в розрахунку: ' + fmtVal(user.B101, '#,##0') + ' кВт·год за літо, частки зима ' + fmtVal(user.G15, '0%') + ', весна ' + fmtVal(user.G16, '0%') + ', осінь ' + fmtVal(user.G18, '0%') + '.';
     recompute(); save(); fillInputs(); refresh();
   }
   function updatePV() {
@@ -2191,11 +2191,11 @@ window.TCO_HELP = {
   function vawtLink() { return VAWT_URL + (locValid(loc) ? '?lat=' + loc.lat + '&lon=' + loc.lon : ''); }
   function buildVawt() {
     var host = document.getElementById('vawtbox'); if (!host) return;
-    host.innerHTML = '<p><b>Генерація з VAWT Advisor.</b> Advisor рахує, скільки дасть турбіна Dospel Dragon у конкретному місці за кожен сезон. ' +
-      'Відкрийте його, у блоці швидкості вітру натисніть 📍 і візьміть вітер з карти (точку об’єкта з картки «Локація» вже буде позначено), потім «Розрахувати» і поверніться сюди.</p>' +
-      '<div class="locrow"><a class="btn" id="vopen" target="_blank" rel="noopener">Відкрити VAWT Advisor ↗</a>' +
-      '<button type="button" class="btn" id="vfill" disabled>Підставити з VAWT Advisor</button></div>' +
-      '<p class="small" id="vmsg" aria-live="polite"></p>';
+    host.innerHTML = '<h3 class="sub">Генерація вітрогенератора в цій точці</h3>' +
+      '<p class="small">Сезонну генерацію турбіни Dospel Dragon рахує калькулятор VAWT Advisor. Кнопка відкриває його з точкою об’єкта: в Advisor натисніть 📍 біля швидкості вітру (точку вже буде позначено), «Застосувати», потім «Розрахувати» і поверніться сюди. Результат з’явиться в таблиці сам.</p>' +
+      '<div class="locrow"><a class="btn" id="vopen" target="_blank" rel="noopener">Відкрити VAWT Advisor ↗</a></div>' +
+      '<p class="small" id="vmsg" aria-live="polite"></p><div class="tblwrap"><table class="grid sun" id="vtable"></table></div>' +
+      '<p><button type="button" class="btn" id="vfill" disabled>Використати в розрахунку</button></p>';
     document.getElementById('vfill').addEventListener('click', fillVawt);
     updateVawt();
   }
@@ -2203,22 +2203,26 @@ window.TCO_HELP = {
   function updateVawt() {
     var a = document.getElementById('vopen'); if (!a) return;
     a.href = vawtLink();
-    var r = vawtRead(), b = document.getElementById('vfill'), m = document.getElementById('vmsg');
+    var r = location.protocol === 'file:' ? null : vawtRead(), b = document.getElementById('vfill'), m = document.getElementById('vmsg'), tb = document.getElementById('vtable');
     b.disabled = !r;
-    if (location.protocol === 'file:') { m.textContent = 'Автопідстановка працює лише на сайті vlgook.github.io/tco-backup-power. У файлі з диска перенесіть сезонну генерацію з Advisor у таблицю сезонів (поля E15–E18) вручну.'; b.disabled = true; return; }
-    if (!r) { m.textContent = 'У цьому браузері ще немає розрахунку VAWT Advisor. Після «Розрахувати» в Advisor тут з’явиться його результат.'; return; }
-    var q = r.q.map(function (x) { return fmtVal(Math.round(x), '#,##0'); }).join(' / ');
-    var where = typeof r.lat === 'number' && typeof r.lon === 'number' ? coord(r.lat) + ', ' + coord(r.lon) : 'точку на карті не обирали';
+    if (location.protocol === 'file:') { m.textContent = 'Автоматично результат Advisor приходить лише на сайті vlgook.github.io/tco-backup-power. У файлі з диска перенесіть сезонну генерацію з Advisor у таблицю сезонів вручну.'; tb.innerHTML = ''; return; }
+    if (!r) { m.textContent = 'У цьому браузері ще немає розрахунку VAWT Advisor. Після «Розрахувати» в Advisor тут з’явиться його результат.'; tb.innerHTML = ''; return; }
+    var where = typeof r.lat === 'number' && typeof r.lon === 'number' ? 'для ' + coord(r.lat) + ', ' + coord(r.lon) : 'без точки на карті (вітер введено вручну)';
     var far = typeof r.lat === 'number' && locValid(loc) && (Math.abs(r.lat - loc.lat) > 0.1 || Math.abs(r.lon - loc.lon) > 0.15);
-    m.textContent = (vawtMsg ? vawtMsg + ' ' : '') + 'Останній розрахунок Advisor (' + vawtWhen(r.at) + '): ' + String(r.model || '') + ', ' + fmtVal(r.p_kw, '0.0#') + ' кВт, ' + (typeof r.v_mean === 'number' ? 'вітер ' + fmtVal(r.v_mean, '0.0') + ' м/с, ' : '') + where +
-      '. Генерація однієї турбіни, кВт·год: зима / весна / літо / осінь – ' + q + '.' + (far ? ' Увага: точка в Advisor інша, ніж у картці «Локація».' : '');
+    m.textContent = (vawtMsg ? vawtMsg + ' ' : '') + 'Розрахунок Advisor від ' + vawtWhen(r.at) + ' ' + where + ': ' + String(r.model || '') + ', ' + fmtVal(r.p_kw, '0.0#') + ' кВт' +
+      (typeof r.v_mean === 'number' ? ', середній вітер на висоті турбіни ' + fmtVal(r.v_mean, '0.0') + ' м/с' : '') + '.' + (far ? ' Увага: точка в Advisor інша, ніж у цій картці.' : '');
+    var cur = ['E15', 'E16', 'E17', 'E18'].map(function (x) { return num2(val(D, x)); }), y = r.q[0] + r.q[1] + r.q[2] + r.q[3];
+    var h = '<tr class="head"><th class="lab">Сезон</th><th>VAWT Advisor, кВт·год на 1 турбіну</th><th>Частка від року</th><th>Зараз у розрахунку, кВт·год</th></tr>';
+    for (var i = 0; i < 4; i++) h += '<tr><th class="lab">' + SNAMES[i] + '</th><td>' + fmtVal(r.q[i], '#,##0') + '</td><td>' + fmtVal(y > 0 ? r.q[i] / y : 0, '0%') + '</td><td>' + fmtVal(cur[i], '#,##0') + '</td></tr>';
+    h += '<tr><th class="lab">Рік</th><td>' + fmtVal(y, '#,##0') + '</td><td></td><td>' + fmtVal(cur[0] + cur[1] + cur[2] + cur[3], '#,##0') + '</td></tr>';
+    tb.innerHTML = h;
   }
   function fillVawt() {
     var r = vawtRead(); if (!r) return;
     ['E15', 'E16', 'E17', 'E18'].forEach(function (a, i) { user[a] = Math.round(r.q[i]); });
     if (r.model) user.B52 = String(r.model).slice(0, 80);
     if (typeof r.p_kw === 'number' && r.p_kw > 0) user.B53 = Math.round(r.p_kw * 100) / 100;
-    vawtMsg = 'Підставлено в таблицю сезонів і поля 52–53.';
+    vawtMsg = 'Використано в розрахунку: генерація в таблиці сезонів, модель і потужність у полях 52–53.';
     recompute(); save(); fillInputs(); refresh();
   }
   window.addEventListener('storage', function (e) { if (e.key === VAWT_KEY) { vawtMsg = ''; updateVawt(); } });
@@ -2496,7 +2500,7 @@ window.TCO_HELP = {
     function fix(t) { FIX.forEach(function (f) { t = t.replace(f[0], f[1]); }); return t; }
     document.getElementById('gloss').innerHTML = '<h2>Словник термінів</h2><dl class="gloss">' + H.glossary.map(function (g) { return '<dt>' + esc(g[0]) + '</dt><dd>' + esc(g[1]) + '</dd>'; }).join('') + '</dl>';
     document.getElementById('metod').innerHTML = '<h2>Методика розрахунку</h2>' + M.metod.concat(METOD_APP).map(function (p, i) { return i === 0 ? '' : (p.b ? '<h3>' + esc(fix(p.t)) + '</h3>' : '<p>' + esc(fix(p.t)) + '</p>'); }).join('');
-    buildInputs(); buildVawt(); restore(); buildSched(); buildLoc(); fillInputs(); refresh();
+    buildInputs(); restore(); buildSched(); buildLoc(); fillInputs(); refresh();
     syncHeader();
     // вікно-попередження: лише при першому запуску в цьому браузері (кнопка активна через 10 секунд);
     // пізніше його можна відкрити з посилання внизу сторінки, вже без відліку
