@@ -173,10 +173,10 @@ footer{max-width:1280px;margin:0 auto;padding:14px 20px 30px;color:var(--mut);fo
 <footer>
   <div class="fmain"><b>Калькулятор TCO резервного живлення</b> · модель v11</div>
   <div>Розроблено Володимиром Гуком · ELKO Ukraine</div>
-  <div>© 2026 ELKO Ukraine · <a href="mailto:energy@elko.ua">energy@elko.ua</a></div>
+  <div>© 2026 ELKO Ukraine · <a href="mailto:energy@elko.ua">energy@elko.ua</a> · <a href="#" id="showintro">Попередження про розрахунки</a></div>
   <div class="fnote">Результати є довідковими оціночними розрахунками на основі введених даних. Сірі номери біля полів – номери полів, на які посилаються перевірки й методика. Дані зберігаються лише у вашому браузері, а файл проєкту – там, куди ви його збережете. Кліматичні дані: ERA5 через Open-Meteo.com (CC BY 4.0). Карта: © учасники OpenStreetMap, CARTO, Esri.</div>
 </footer>
-<div id="startdlg" class="mapdlg" role="dialog" aria-modal="true" aria-labelledby="starttitle">
+<div id="startdlg" class="mapdlg" hidden role="dialog" aria-modal="true" aria-labelledby="starttitle">
   <div class="mapcard startcard">
     <h2 id="starttitle"><span class="warnico" aria-hidden="true">⚠</span> Калькулятор TCO резервного живлення</h2>
     <p>Цей калькулятор створено Володимиром Гуком, ELKO Ukraine, для попереднього порівняння повної вартості володіння (TCO) варіантів резервного живлення: дизель-генератора, системи накопичення енергії, сонячних панелей і вітрогенераторів.</p>
@@ -2498,17 +2498,30 @@ window.TCO_HELP = {
     document.getElementById('metod').innerHTML = '<h2>Методика розрахунку</h2>' + M.metod.concat(METOD_APP).map(function (p, i) { return i === 0 ? '' : (p.b ? '<h3>' + esc(fix(p.t)) + '</h3>' : '<p>' + esc(fix(p.t)) + '</p>'); }).join('');
     buildInputs(); buildVawt(); restore(); buildSched(); buildLoc(); fillInputs(); refresh();
     syncHeader();
-    // вікно-попередження при старті: кнопка стає активною через 10 секунд
+    // вікно-попередження: лише при першому запуску в цьому браузері (кнопка активна через 10 секунд);
+    // пізніше його можна відкрити з посилання внизу сторінки, вже без відліку
     (function () {
-      var dlg = document.getElementById('startdlg'), btn = document.getElementById('startok'), n = 10;
-      if (/[?&]nointro\b/.test(location.search)) { dlg.hidden = true; return; }
-      document.body.classList.add('modal');
-      var tick = setInterval(function () {
-        n--;
-        if (n > 0) { btn.textContent = 'Зрозуміло, продовжити (' + n + ')'; return; }
-        clearInterval(tick); btn.disabled = false; btn.textContent = 'Зрозуміло, продовжити'; btn.focus();
-      }, 1000);
-      btn.addEventListener('click', function () { dlg.hidden = true; document.body.classList.remove('modal'); });
+      var dlg = document.getElementById('startdlg'), btn = document.getElementById('startok'), KEY = 'tco_intro_seen', tick = null;
+      function seen() { try { return localStorage.getItem(KEY) === '1'; } catch (e) { return false; } }
+      function open(wait) {
+        dlg.hidden = false; document.body.classList.add('modal');
+        clearInterval(tick);
+        if (!wait) { btn.disabled = false; btn.textContent = 'Зрозуміло, продовжити'; btn.focus(); return; }
+        var n = 10; btn.disabled = true; btn.textContent = 'Зрозуміло, продовжити (' + n + ')';
+        tick = setInterval(function () {
+          n--;
+          if (n > 0) { btn.textContent = 'Зрозуміло, продовжити (' + n + ')'; return; }
+          clearInterval(tick); btn.disabled = false; btn.textContent = 'Зрозуміло, продовжити'; btn.focus();
+        }, 1000);
+      }
+      btn.addEventListener('click', function () {
+        dlg.hidden = true; document.body.classList.remove('modal');
+        try { localStorage.setItem(KEY, '1'); } catch (e) {}
+      });
+      var link = document.getElementById('showintro');
+      if (link) link.addEventListener('click', function (e) { e.preventDefault(); open(false); });
+      if (/[?&]nointro\b/.test(location.search) || seen()) { dlg.hidden = true; return; }
+      open(true);
     })();
     document.getElementById('mapok').addEventListener('click', function () { closeMap(true); });
     document.getElementById('mapcancel').addEventListener('click', function () { closeMap(false); });
