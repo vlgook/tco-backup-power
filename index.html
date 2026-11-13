@@ -159,7 +159,7 @@ footer{max-width:1280px;margin:0 auto;padding:14px 20px 30px;color:var(--mut);fo
     <div class="card"><h2>Структура TCO за 10 років, грн</h2><div class="tblwrap"><table id="t_str"></table></div></div>
     <div class="card"><h2>Показники ROI</h2><div class="tblwrap"><table id="t_roi"></table></div></div>
   </section>
-  <section class="panel" id="p_met"><div class="card" id="gloss"></div><div class="card"><div id="metod"></div></div></section>
+  <section class="panel" id="p_met"><div class="card" id="scheme"></div><div class="card" id="gloss"></div><div class="card"><div id="metod"></div></div></section>
 </main>
 <div id="mapdlg" class="mapdlg" hidden role="dialog" aria-modal="true" aria-label="Вибір локації на карті">
   <div class="mapcard">
@@ -1748,6 +1748,137 @@ window.TCO_HELP = {
   var api = { run: run, defaults: defaults, template: template, six: six, STEPS: STEPS, DT: DT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.TCOSim = api;
 })(typeof window !== 'undefined' ? window : this);
+</script><script>/* Анімована схема «Як працює система» для вкладки «Методика і терміни».
+   Найповніша конфігурація УЗЕ + PV + вітер + ДГ. Стани відтворюють черговість, за якою рахує модель (sim.js):
+   світло є → відключення вдень → відключення вночі → АКБ на порозі запуску ДГ. */
+(function () {
+  var STATES = [
+    { id: 'grid', btn: 'Світло є', soc: 85, chg: 1, day: 1, out: 0, dg: 0, wind: 1,
+      flows: ['f-grid', 'f-ats-inv', 'f-inv-load', 'f-pv', 'f-wind', 'f-chg'],
+      txt: 'Світло є. АВР у положенні «мережа»: мережа живить навантаження через інвертор і дозаряджає АКБ після відключення. Панелі й вітрогенератор працюють паралельно і зменшують покупку енергії з мережі.' },
+    { id: 'day', btn: 'Відключення вдень', soc: 70, chg: 1, day: 1, out: 1, dg: 0, wind: 1,
+      flows: ['f-pv', 'f-wind', 'f-inv-load', 'f-chg'],
+      txt: 'Відключення вдень. Мережі немає, інвертор переходить на автономну роботу без перерви живлення. Навантаження живлять панелі й вітрогенератор через DC-шину інвертора. Надлишок іде в АКБ, нестачу покриває АКБ. ДГ стоїть.' },
+    { id: 'night', btn: 'Відключення вночі', soc: 40, chg: -1, day: 0, out: 1, dg: 0, wind: 1,
+      flows: ['f-wind', 'f-dis', 'f-inv-load'],
+      txt: 'Відключення вночі. Панелі не генерують, вітрогенератор дає стільки, скільки дозволяє вітер. Головне джерело – АКБ, і її заряд знижується.' },
+    { id: 'dg', btn: 'АКБ розряджена – ДГ', soc: 25, chg: 1, day: 0, out: 1, dg: 1, wind: 0,
+      flows: ['f-dg', 'f-ats-inv', 'f-inv-load', 'f-chg'],
+      txt: 'Заряд АКБ упав до порогу запуску ДГ (поле 87). Генератор запускається, АВР перемикає вхід інвертора на нього. ДГ живить навантаження і заряджає АКБ до порогу зупинки (поле 88), після чого зупиняється, і далі знову працює АКБ.' }
+  ];
+
+  var SVG = '<svg class="scheme" viewBox="0 0 760 340" role="img" aria-labelledby="schTitle schDesc">' +
+    '<title id="schTitle">Схема підключення: УЗЕ + PV + вітер + ДГ</title><desc id="schDesc">Панелі та вітрогенератор через контролер підключені до DC-шини гібридного інвертора, до неї ж підключена АКБ. Мережа і дизель-генератор через АВР подаються на вхід інвертора, вихід інвертора живить навантаження.</desc>' +
+    // базові лінії
+    '<g class="wire">' +
+      '<path d="M150 55 H250 V140 H330"/><path d="M122 200 H170"/><path d="M250 200 H290 V180 H330"/>' +
+      '<path d="M390 210 V262"/><path d="M410 210 V262"/>' +
+      '<path d="M690 52 H650"/><path d="M690 140 H605 V74"/><path d="M560 52 H500 V140 H470"/>' +
+      '<path d="M470 180 H520 V258 H560"/>' +
+    '</g>' +
+    // потоки (напрям = напрям енергії)
+    '<g class="flow">' +
+      '<path id="f-pv" class="c-pv" d="M150 55 H250 V140 H330"/>' +
+      '<path id="f-wind" class="c-wind" d="M122 200 H170 M250 200 H290 V180 H330"/>' +
+      '<path id="f-chg" class="c-bat" d="M390 210 V262"/>' +
+      '<path id="f-dis" class="c-bat" d="M410 262 V210"/>' +
+      '<path id="f-grid" class="c-grid" d="M690 52 H650"/>' +
+      '<path id="f-dg" class="c-dg" d="M690 140 H605 V74"/>' +
+      '<path id="f-ats-inv" class="c-ac" d="M560 52 H500 V140 H470"/>' +
+      '<path id="f-inv-load" class="c-ac" d="M470 180 H520 V258 H560"/>' +
+    '</g>' +
+    // PV + сонце/місяць
+    '<g class="box"><rect x="30" y="25" width="120" height="60" rx="6"/></g>' +
+    '<g class="pvcells"><rect x="40" y="35" width="30" height="20"/><rect x="74" y="35" width="30" height="20"/><rect x="108" y="35" width="30" height="20"/></g>' +
+    '<text x="90" y="75" text-anchor="middle" class="lb">Сонячні панелі</text>' +
+    '<circle id="sch-sun" cx="160" cy="18" r="9"/><path id="sch-moon" d="M163 9 a10 10 0 1 0 6 16 a8 8 0 1 1 -6 -16z"/>' +
+    // вітрогенератор (H-ротор)
+    '<g class="vawt"><line x1="95" y1="170" x2="95" y2="232" class="mast"/>' +
+      '<g class="rotor" id="sch-rotor"><line x1="72" y1="178" x2="118" y2="178"/><line x1="72" y1="206" x2="118" y2="206"/>' +
+      '<line x1="72" y1="170" x2="72" y2="214" class="blade"/><line x1="118" y1="170" x2="118" y2="214" class="blade"/></g></g>' +
+    '<text x="95" y="250" text-anchor="middle" class="lb">Вітрогенератор Dragon</text>' +
+    '<g class="box"><rect x="170" y="182" width="80" height="36" rx="6"/></g><text x="210" y="204" text-anchor="middle" class="lb">Контролер</text>' +
+    // інвертор
+    '<g class="box main"><rect x="330" y="110" width="140" height="100" rx="8"/></g>' +
+    '<text x="400" y="150" text-anchor="middle" class="lb b">Гібридний</text><text x="400" y="166" text-anchor="middle" class="lb b">інвертор</text>' +
+    '<text x="340" y="203" class="lb s">DC</text><text x="460" y="203" text-anchor="end" class="lb s">AC</text>' +
+    // АКБ
+    '<g class="box"><rect x="340" y="262" width="120" height="58" rx="6"/></g>' +
+    '<rect x="352" y="292" width="96" height="14" rx="3" class="socbg"/><rect id="sch-soc" x="352" y="292" width="80" height="14" rx="3" class="soc"/>' +
+    '<text x="400" y="283" text-anchor="middle" class="lb">УЗЕ (АКБ)</text><text id="sch-soct" x="400" y="303" text-anchor="middle" class="lb s soct">80%</text>' +
+    // АВР
+    '<g class="box"><rect x="560" y="30" width="90" height="44" rx="6"/></g><text x="605" y="49" text-anchor="middle" class="lb b">АВР</text>' +
+    '<text id="sch-ats" x="605" y="65" text-anchor="middle" class="lb s">мережа</text>' +
+    // мережа
+    '<g class="tower"><path d="M705 18 L692 86 M705 18 L718 86 M695 34 H715 M693 50 H717 M698 34 L712 50 M712 34 L698 50"/></g>' +
+    '<text x="705" y="101" text-anchor="middle" class="lb">Мережа</text>' +
+    '<g id="sch-x" class="xmark"><path d="M690 30 L720 70 M720 30 L690 70"/></g>' +
+    // ДГ
+    '<g class="box" id="sch-dgbox"><rect x="690" y="118" width="58" height="44" rx="6"/></g><text x="719" y="145" text-anchor="middle" class="lb b">ДГ</text>' +
+    '<g id="sch-smoke"><circle cx="742" cy="112" r="3"/><circle cx="747" cy="104" r="4"/><circle cx="752" cy="95" r="5"/></g>' +
+    // навантаження
+    '<g class="box"><rect x="560" y="230" width="150" height="56" rx="6"/></g>' +
+    '<path class="bulb" d="M582 245 a8 8 0 1 1 10 0 v6 h-10z"/><text x="645" y="256" text-anchor="middle" class="lb">Навантаження</text><text x="645" y="272" text-anchor="middle" class="lb s">критичне</text>' +
+    '</svg>';
+
+  var CSS = '.schwrap{max-width:860px}.schbtns{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.schbtns button{border:1px solid var(--line);background:#fff;border-radius:16px;padding:5px 12px;font:inherit;font-size:13px;cursor:pointer;color:var(--ink)}' +
+    '.schbtns button.on{background:var(--acc);border-color:var(--acc);color:#fff}.schbtns button.auto{margin-left:auto}' +
+    'svg.scheme{max-width:760px;margin:6px 0;background:#fbfcfd;border:1px solid var(--line);border-radius:8px}' +
+    'svg.scheme .wire path{fill:none;stroke:#d3d9e0;stroke-width:5;stroke-linecap:round;stroke-linejoin:round}' +
+    'svg.scheme .flow path{fill:none;stroke-width:5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:3 13;opacity:0;transition:opacity .4s}' +
+    'svg.scheme .flow path.on{opacity:1;animation:schflow .9s linear infinite}@keyframes schflow{to{stroke-dashoffset:-16}}' +
+    'svg.scheme .c-pv{stroke:#e0a100}svg.scheme .c-wind{stroke:#1a9e8f}svg.scheme .c-bat{stroke:#2e8b3e}svg.scheme .c-grid{stroke:#2f6fd6}svg.scheme .c-dg{stroke:#b5651d}svg.scheme .c-ac{stroke:#44546a}' +
+    'svg.scheme .box rect{fill:#fff;stroke:#9aa5b1;stroke-width:1.5}svg.scheme .box.main rect{stroke:var(--acc);stroke-width:2}' +
+    'svg.scheme .pvcells rect{fill:#2f4b7c;stroke:#fff;stroke-width:1}svg.scheme text.lb{font-size:12px}svg.scheme text.b{font-weight:600}svg.scheme text.s{font-size:10px;fill:var(--mut)}' +
+    'svg.scheme text.soct{fill:#1f2933;font-weight:600}svg.scheme .socbg{fill:#e3e7ec}svg.scheme .soc{fill:#2e8b3e;transition:width .8s,fill .8s}' +
+    'svg.scheme #sch-sun{fill:#f5b800;transition:opacity .5s}svg.scheme #sch-moon{fill:#8a96a3;transition:opacity .5s}' +
+    'svg.scheme .vawt line{stroke:#44546a;stroke-width:2.5;stroke-linecap:round}svg.scheme .vawt .blade{stroke-width:4}' +
+    'svg.scheme .rotor{transform-box:fill-box;transform-origin:center}svg.scheme .rotor.spin{animation:schspin 1.1s linear infinite}svg.scheme .rotor.slow{animation-duration:2.6s}' +
+    '@keyframes schspin{0%{transform:scaleX(1)}50%{transform:scaleX(-1)}100%{transform:scaleX(1)}}' +
+    'svg.scheme .tower path{fill:none;stroke:#44546a;stroke-width:2}svg.scheme .xmark path{fill:none;stroke:#b3261e;stroke-width:4;stroke-linecap:round;transition:opacity .4s}' +
+    'svg.scheme #sch-smoke circle{fill:#9aa5b1;opacity:0}svg.scheme #sch-smoke.on circle{animation:schsmoke 1.6s ease-out infinite}svg.scheme #sch-smoke.on circle:nth-child(2){animation-delay:.5s}svg.scheme #sch-smoke.on circle:nth-child(3){animation-delay:1s}' +
+    '@keyframes schsmoke{0%{opacity:.7;transform:translateY(6px)}100%{opacity:0;transform:translateY(-8px)}}' +
+    'svg.scheme #sch-dgbox.on rect{stroke:#b5651d;stroke-width:2.5}svg.scheme .bulb{fill:#f5b800;stroke:#a86200}' +
+    '#schcap{min-height:3.2em;margin:4px 0 8px}.schscroll{overflow-x:auto}@media (max-width:640px){svg.scheme{min-width:620px}#schcap{min-height:6.5em}}' +
+    '@media (prefers-reduced-motion:reduce){svg.scheme .flow path.on{animation:none;stroke-dasharray:none}svg.scheme .rotor.spin{animation:none}svg.scheme #sch-smoke.on circle{animation:none;opacity:.6}}' +
+    '@media print{.schbtns{display:none}svg.scheme .flow path.on{animation:none}}';
+
+  var cur = 0, timer = null, auto = true;
+  function $(id) { return document.getElementById(id); }
+  function show(i) {
+    cur = i; var s = STATES[i], all = ['f-pv', 'f-wind', 'f-chg', 'f-dis', 'f-grid', 'f-dg', 'f-ats-inv', 'f-inv-load'];
+    all.forEach(function (id) { $(id).classList.toggle('on', s.flows.indexOf(id) >= 0); });
+    $('sch-sun').style.opacity = s.day ? 1 : 0; $('sch-moon').style.opacity = s.day ? 0 : 1;
+    $('sch-x').style.opacity = s.out ? 1 : 0;
+    $('sch-ats').textContent = s.dg ? 'генератор' : 'мережа';
+    $('sch-smoke').classList.toggle('on', !!s.dg); $('sch-dgbox').classList.toggle('on', !!s.dg);
+    var r = $('sch-rotor'); r.classList.add('spin'); r.classList.toggle('slow', !s.wind);
+    $('sch-soc').setAttribute('width', Math.round(96 * s.soc / 100));
+    $('sch-soc').style.fill = s.soc <= 30 ? '#a86200' : '#2e8b3e';
+    $('sch-soct').textContent = s.soc + '%' + (s.chg > 0 ? ' ↑' : ' ↓');
+    $('schcap').textContent = s.txt;
+    [].forEach.call(document.querySelectorAll('#schbtns button[data-i]'), function (b) { b.classList.toggle('on', +b.dataset.i === i); b.setAttribute('aria-pressed', +b.dataset.i === i); });
+  }
+  function setAuto(on) {
+    auto = on; clearInterval(timer);
+    var b = $('schauto'); b.textContent = on ? '❚❚ Пауза' : '▶ Показати по черзі'; b.setAttribute('aria-pressed', on);
+    if (on) timer = setInterval(function () { show((cur + 1) % STATES.length); }, 6500);
+  }
+  window.TCOScheme = {
+    build: function (host) {
+      var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
+      host.innerHTML = '<div class="schwrap"><h2>Як працює система</h2>' +
+        '<p>Схема показує найповнішу конфігурацію «УЗЕ + PV + вітер + ДГ» і те, звідки береться енергія в різних ситуаціях. Модель розрахунку діє в тій самій черговості.</p>' +
+        '<div class="schbtns" id="schbtns">' + STATES.map(function (s, i) { return '<button type="button" data-i="' + i + '">' + s.btn + '</button>'; }).join('') +
+        '<button type="button" class="auto" id="schauto"></button></div><div class="schscroll">' + SVG + '</div><p id="schcap" aria-live="polite"></p>' +
+        '<p class="small">Вітрогенератор підключено через власний контролер до DC-шини гібридного інвертора, туди ж підключена АКБ. Мережа і ДГ подаються на вхід інвертора через АВР. В інших сценаріях відсутніх елементів просто немає, а в сценарії «ДГ» без інвертора АВР передає живлення від генератора прямо на навантаження. У конкретному проєкті підключення може відрізнятися.</p></div>';
+      [].forEach.call(host.querySelectorAll('#schbtns button[data-i]'), function (b) { b.addEventListener('click', function () { setAuto(false); show(+b.dataset.i); }); });
+      $('schauto').addEventListener('click', function () { setAuto(!auto); if (auto) show((cur + 1) % STATES.length); });
+      var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+      show(0); setAuto(!reduce);
+    }
+  };
+})();
 </script>
 <script>(function () {
   'use strict';
@@ -2500,6 +2631,7 @@ window.TCO_HELP = {
     function fix(t) { FIX.forEach(function (f) { t = t.replace(f[0], f[1]); }); return t; }
     document.getElementById('gloss').innerHTML = '<h2>Словник термінів</h2><dl class="gloss">' + H.glossary.map(function (g) { return '<dt>' + esc(g[0]) + '</dt><dd>' + esc(g[1]) + '</dd>'; }).join('') + '</dl>';
     document.getElementById('metod').innerHTML = '<h2>Методика розрахунку</h2>' + M.metod.concat(METOD_APP).map(function (p, i) { return i === 0 ? '' : (p.b ? '<h3>' + esc(fix(p.t)) + '</h3>' : '<p>' + esc(fix(p.t)) + '</p>'); }).join('');
+    if (window.TCOScheme) TCOScheme.build(document.getElementById('scheme'));
     buildInputs(); restore(); buildSched(); buildLoc(); fillInputs(); refresh();
     syncHeader();
     // вікно-попередження: лише при першому запуску в цьому браузері (кнопка активна через 10 секунд);
