@@ -26,6 +26,7 @@ main{max-width:1280px;margin:0 auto;padding:16px 20px 40px}
 .banner.ok{background:#e8f5ee;border-color:#b9dfc9;color:var(--ok)}
 .banner.warn{background:#fff4e0;border-color:#f0d19b;color:var(--warn)}
 .banner.err{background:#fdeceb;border-color:#f1b8b4;color:var(--err)}
+#tabmsg .btn{margin:8px 8px 0 0}
 .panel{display:none}.panel.on{display:block}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
 .card h2,.sec h3{font-size:15px;margin:0 0 10px}
@@ -115,7 +116,7 @@ footer{max-width:1280px;margin:0 auto;padding:14px 20px 30px;color:var(--mut);fo
       <button id="bsave" type="button">Зберегти проєкт</button>
       <button id="bopen" type="button">Відкрити проєкт</button>
       <button id="bprint" type="button">Друк / PDF</button>
-      <button id="breset" type="button">Скинути до прикладу</button>
+      <button id="breset" type="button" title="Почати новий проєкт з даних прикладу. Поточний спершу збережіть кнопкою «Зберегти проєкт».">Новий проєкт</button>
       <input id="file" type="file" accept=".json,application/json" hidden>
     </div>
   </div>
@@ -129,6 +130,7 @@ footer{max-width:1280px;margin:0 auto;padding:14px 20px 30px;color:var(--mut);fo
 </header>
 <main>
   <div id="banner" class="banner ok"></div>
+  <div id="tabmsg" class="banner warn" hidden></div>
   <div id="filemsg" class="small"></div>
   <section class="panel on" id="p_res">
     <div class="card">
@@ -1885,6 +1887,9 @@ window.TCO_HELP = {
   var E = window.TCOEngine, M = window.TCO_MODEL, H = window.TCO_HELP;
   var D = 'Дані', R = 'Розрахунок', T = 'TCO', B = 'Дашборд';
   var STORE_KEY = 'tco-backup-power-' + M.version;
+  // ідентифікатор проєкту (для передачі з VAWT Advisor саме в цей проєкт) і вкладки (для виявлення змін в іншій вкладці)
+  function newId() { return (Math.random().toString(36).slice(2, 10) + Date.now().toString(36)).replace(/[^a-z0-9]/g, '').slice(0, 20); }
+  var TAB = newId(), pid = newId(), conflict = null;
   var model = new E.Model(JSON.parse(JSON.stringify(M.cells)));
   var COLS = ['B', 'C', 'D', 'E', 'F', 'G', 'H'];
   var S = window.TCOSim, Sun = window.TCOSun, PV = window.TCOPV, user = {}, sched = S.defaults(), simInfo = null, OVR = null, loc = null;
@@ -2065,6 +2070,8 @@ window.TCO_HELP = {
 
   // ---------- графік доби ----------
   var METOD_APP = [
+    { t: 'Де зберігаються дані', b: 1 },
+    { t: 'Застосунок не має сервера: усе, що ви вводите, зберігається лише у вашому браузері на цьому комп’ютері, і інші користувачі цих даних не бачать. Браузер пам’ятає один, останній проєкт. Щоб вести кілька об’єктів, зберігайте кожен у файл кнопкою «Зберегти проєкт», а «Новий проєкт» починає наступний із даних прикладу. Якщо проєкт змінити в іншій вкладці цього ж браузера, застосунок попередить і запропонує обрати версію. Результат VAWT Advisor, відкритого кнопкою з проєкту, повертається саме в цей проєкт.' },
     { t: 'Режим «графік доби» (лише в застосунку)', b: 1 },
     { t: 'Замість часток пікових і світлих годин задаються до трьох типів діб. Кожна доба складається із шести відрізків, що чергуються: світло є, немає, є, немає і так далі; сума шести відрізків дорівнює 24 годинам, нульовий відрізок пропускається. Для кожного сезону вказується, скільки в ньому діб кожного типу; решта діб проходить без відключень.', b: 0 },
     { t: 'Локація об’єкта', b: 1 },
@@ -2312,14 +2319,18 @@ window.TCO_HELP = {
   // Обидва застосунки на vlgook.github.io мають спільне сховище браузера.
   // VAWT Advisor після кожного «Розрахувати» записує результат під ключем tco_vawt_last.
   var VAWT_URL = 'https://vlgook.github.io/vawt-advisor/', VAWT_KEY = 'tco_vawt_last', vawtMsg = '';
+  // Advisor, відкритий кнопкою з цього проєкту, пише ще й у ключ tco_vawt_last_<pid>; такий результат має пріоритет
+  function vawtOk(o) { return o && o.v === 1 && o.q && o.q.length === 4 && o.q.every(function (x) { return typeof x === 'number' && isFinite(x) && x >= 0 && x < 1e7; }); }
   function vawtRead() {
     try {
+      var own = JSON.parse(localStorage.getItem(VAWT_KEY + '_' + pid) || 'null');
+      if (vawtOk(own)) { own.own = true; return own; }
       var o = JSON.parse(localStorage.getItem(VAWT_KEY) || 'null');
-      if (o && o.v === 1 && o.q && o.q.length === 4 && o.q.every(function (x) { return typeof x === 'number' && isFinite(x) && x >= 0 && x < 1e7; })) return o;
+      if (vawtOk(o)) { o.own = false; return o; }
     } catch (e) {}
     return null;
   }
-  function vawtLink() { return VAWT_URL + (locValid(loc) ? '?lat=' + loc.lat + '&lon=' + loc.lon : ''); }
+  function vawtLink() { return VAWT_URL + '?tco=' + pid + (locValid(loc) ? '&lat=' + loc.lat + '&lon=' + loc.lon : ''); }
   function buildVawt() {
     var host = document.getElementById('vawtbox'); if (!host) return;
     host.innerHTML = '<h3 class="sub">Генерація вітрогенератора в цій точці</h3>' +
@@ -2340,7 +2351,7 @@ window.TCO_HELP = {
     if (!r) { m.textContent = 'У цьому браузері ще немає розрахунку VAWT Advisor. Після «Розрахувати» в Advisor тут з’явиться його результат.'; tb.innerHTML = ''; return; }
     var where = typeof r.lat === 'number' && typeof r.lon === 'number' ? 'для ' + coord(r.lat) + ', ' + coord(r.lon) : 'без точки на карті (вітер введено вручну)';
     var far = typeof r.lat === 'number' && locValid(loc) && (Math.abs(r.lat - loc.lat) > 0.1 || Math.abs(r.lon - loc.lon) > 0.15);
-    m.textContent = (vawtMsg ? vawtMsg + ' ' : '') + 'Розрахунок Advisor від ' + vawtWhen(r.at) + ' ' + where + ': ' + String(r.model || '') + ', ' + fmtVal(r.p_kw, '0.0#') + ' кВт' +
+    m.textContent = (vawtMsg ? vawtMsg + ' ' : '') + (r.own ? '' : 'Увага: цей розрахунок Advisor зроблено не з кнопки цього проєкту, він може належати іншому об’єкту. ') + 'Розрахунок Advisor від ' + vawtWhen(r.at) + ' ' + where + ': ' + String(r.model || '') + ', ' + fmtVal(r.p_kw, '0.0#') + ' кВт' +
       (typeof r.v_mean === 'number' ? ', середній вітер ' + fmtVal(r.v_mean, '0.0') + ' м/с на висоті 10 м' : '') + (typeof r.h === 'number' ? ', вісь турбіни на висоті ' + fmtVal(r.h, '0.##') + ' м' : '') + '.' + (far ? ' Увага: точка в Advisor інша, ніж у цій картці.' : '');
     var cur = ['E15', 'E16', 'E17', 'E18'].map(function (x) { return num2(val(D, x)); }), y = r.q[0] + r.q[1] + r.q[2] + r.q[3];
     var h = '<tr class="head"><th class="lab">Сезон</th><th>VAWT Advisor, кВт·год на 1 турбіну</th><th>Частка від року</th><th>Зараз у розрахунку, кВт·год</th></tr>';
@@ -2356,7 +2367,7 @@ window.TCO_HELP = {
     vawtMsg = 'Використано в розрахунку: генерація в таблиці сезонів, модель і потужність у полях 52–53.';
     recompute(); save(); fillInputs(); refresh();
   }
-  window.addEventListener('storage', function (e) { if (e.key === VAWT_KEY) { vawtMsg = ''; updateVawt(); } });
+  window.addEventListener('storage', function (e) { if (e.key === VAWT_KEY || e.key === VAWT_KEY + '_' + pid) { vawtMsg = ''; updateVawt(); } });
   window.addEventListener('focus', updateVawt);
 
   // ---------- графіки (SVG) ----------
@@ -2578,11 +2589,12 @@ window.TCO_HELP = {
   }
 
   // ---------- збереження проєкту ----------
-  function snapshot() { var o = {}; Object.keys(inputs).forEach(function (a) { o[a] = user[a]; }); return { inputs: o, sched: sched, loc: loc, pvset: pvset, pvres: pvres }; }
+  function snapshot() { var o = {}; Object.keys(inputs).forEach(function (a) { o[a] = user[a]; }); return { inputs: o, sched: sched, loc: loc, pvset: pvset, pvres: pvres, pid: pid, tab: TAB, at: Date.now() }; }
   function okNum(x) { return x === null || typeof x === 'number' || typeof x === 'string'; }
   function apply(o) {
     if (!o) return;
     var inp = o.inputs || o, sc = o.sched;
+    if (typeof o.pid === 'string' && /^[a-z0-9]{6,40}$/.test(o.pid)) pid = o.pid;
     if (o.pvset && typeof o.pvset === 'object') pvset = { tilt: +o.pvset.tilt, az: +o.pvset.az, pr: +o.pvset.pr };
     if (Object.prototype.hasOwnProperty.call(o, 'pvres')) pvres = o.pvres && Array.isArray(o.pvres.gti) && o.pvres.gti.length === 4 && o.pvres.gti.every(function (x) { return typeof x === 'number' && isFinite(x) && x >= 0; }) ?
       { lat: +o.pvres.lat, lon: +o.pvres.lon, tilt: +o.pvres.tilt, az: +o.pvres.az, gti: o.pvres.gti.slice(), years: +o.pvres.years || 0, at: String(o.pvres.at || '').slice(0, 10) } : null;
@@ -2595,11 +2607,41 @@ window.TCO_HELP = {
     }
     recompute();
   }
-  function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(snapshot())); } catch (e) { /* сховище недоступне */ } }
-  function restore() { try { var s = localStorage.getItem(STORE_KEY); if (s) apply(JSON.parse(s)); } catch (e) { /* сховище недоступне */ } }
+  // поки не вирішено конфлікт з іншою вкладкою, ця вкладка нічого не перезаписує
+  function save() { if (conflict) return; try { localStorage.setItem(STORE_KEY, JSON.stringify(snapshot())); } catch (e) { /* сховище недоступне */ } }
+  function projName(o) { var n = o && o.inputs && o.inputs.B5; return typeof n === 'string' && n.trim() ? '«' + n.trim().slice(0, 60) + '»' : 'без назви'; }
+  function when(ms) { var d = new Date(ms); return isFinite(d) ? d.toLocaleDateString('uk-UA') + ' о ' + d.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }) : ''; }
+  function restore() {
+    try {
+      var s = localStorage.getItem(STORE_KEY); if (!s) return;
+      var o = JSON.parse(s); apply(o);
+      var m = document.getElementById('filemsg');
+      m.textContent = 'Відкрито останній проєкт у цьому браузері: ' + projName(o) + (o.at ? ', збережений ' + when(o.at) : '') +
+        '. Щоб почати інший об’єкт, натисніть «Новий проєкт».';
+      setTimeout(function () { if (m.textContent.indexOf('Відкрито останній проєкт') === 0) m.textContent = ''; }, 15000);
+    } catch (e) { /* сховище недоступне */ }
+  }
+  // інша вкладка цього браузера зберегла свій проєкт під тим самим ключем
+  function showConflict() {
+    var bar = document.getElementById('tabmsg');
+    if (!conflict) { bar.hidden = true; bar.innerHTML = ''; return; }
+    bar.innerHTML = 'В іншій вкладці цього браузера змінено проєкт ' + esc(projName(conflict)) + (conflict.at ? ' (' + esc(when(conflict.at)) + ')' : '') +
+      '. Збережена копія спільна для всіх вкладок, тому зміни в цій вкладці поки не зберігаються. Оберіть, з якою версією працювати далі.<br>' +
+      '<button type="button" class="btn" id="tabtake">Відкрити версію з іншої вкладки</button>' +
+      '<button type="button" class="btn" id="tabkeep">Лишити версію з цієї вкладки</button>';
+    bar.hidden = false;
+    document.getElementById('tabtake').addEventListener('click', function () {
+      var o = conflict; conflict = null; showConflict(); apply(o); buildSched(); buildLoc(); fillInputs(); refresh();
+    });
+    document.getElementById('tabkeep').addEventListener('click', function () { conflict = null; showConflict(); save(); });
+  }
+  window.addEventListener('storage', function (e) {
+    if (e.key !== STORE_KEY || !e.newValue) return;
+    try { var o = JSON.parse(e.newValue); if (o && o.tab !== TAB) { conflict = o; showConflict(); } } catch (x) {}
+  });
   function download() {
     var name = (txt(D, 'B5') || 'проєкт').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 60) || 'проєкт';
-    var blob = new Blob([JSON.stringify({ app: 'tco-backup-power', model: M.version, saved: new Date().toISOString(), inputs: snapshot().inputs, sched: sched, loc: loc, pvset: pvset, pvres: pvres }, null, 1)], { type: 'application/json' });
+    var blob = new Blob([JSON.stringify({ app: 'tco-backup-power', model: M.version, saved: new Date().toISOString(), pid: pid, inputs: snapshot().inputs, sched: sched, loc: loc, pvset: pvset, pvres: pvres }, null, 1)], { type: 'application/json' });
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'TCO ' + name + '.json'; document.body.appendChild(a); a.click(); a.remove();
   }
   function upload(file) {
@@ -2608,6 +2650,7 @@ window.TCO_HELP = {
       var msg = document.getElementById('filemsg');
       try {
         var o = JSON.parse(rd.result); if (!o || o.app !== 'tco-backup-power' || !o.inputs) throw new Error('bad');
+        conflict = null; showConflict(); if (!o.pid) pid = newId();
         apply(o); save(); buildSched(); buildLoc(); fillInputs(); refresh();
         setTimeout(function () { msg.textContent = ''; }, 6000);
         msg.textContent = 'Проєкт відкрито' + (o.model && o.model !== M.version ? ' (збережений у моделі ' + o.model + ')' : '') + '.';
@@ -2678,9 +2721,11 @@ window.TCO_HELP = {
     document.getElementById('bprint').addEventListener('click', function () { window.print(); });
     var rs = document.getElementById('breset'), armed = false;
     rs.addEventListener('click', function () {
-      if (!armed) { armed = true; rs.textContent = 'Скинути? Натисніть ще раз'; setTimeout(function () { armed = false; rs.textContent = 'Скинути до прикладу'; }, 4000); return; }
-      armed = false; rs.textContent = 'Скинути до прикладу'; document.getElementById('filemsg').textContent = '';
+      if (!armed) { armed = true; rs.textContent = 'Почати новий? Натисніть ще раз'; setTimeout(function () { armed = false; rs.textContent = 'Новий проєкт'; }, 4000); return; }
+      armed = false; rs.textContent = 'Новий проєкт';
+      conflict = null; showConflict(); pid = newId(); vawtMsg = '';
       Object.keys(inputs).forEach(function (a) { user[a] = inputs[a].def; }); sched = S.defaults(); loc = null; pvset = { tilt: 35, az: 0, pr: 0.8 }; pvres = null; pvMsg = ''; recompute(); save(); buildSched(); buildLoc(); fillInputs(); refresh();
+      document.getElementById('filemsg').textContent = 'Новий проєкт: заповнено даними прикладу. Попередній проєкт у цьому браузері замінено; якщо він потрібен, відкрийте його збережений файл.';
     });
     document.getElementById('onlybad').addEventListener('change', function (e) { document.getElementById('checktable').classList.toggle('onlybad', e.target.checked); });
   }
