@@ -2787,8 +2787,15 @@ window.TCO_HELP = {
         var o = JSON.parse(rd.result); if (!o || o.app !== 'tco-backup-power' || !o.inputs) throw new Error('bad');
         conflict = null; showConflict(); if (!o.pid) pid = newId();
         apply(o); save(); buildSched(); buildLoc(); fillInputs(); refresh();
-        setTimeout(function () { msg.textContent = ''; }, 6000);
-        msg.textContent = 'Проєкт відкрито' + (o.model && o.model !== M.version ? ' (збережений у версії ' + o.model + ')' : '') + '.';
+        var older = o.model && o.model !== M.version;
+        if (!older) { msg.textContent = 'Проєкт відкрито.'; setTimeout(function () { msg.textContent = ''; }, 6000); }
+        else {
+          var fresh = Object.keys(inputs).filter(function (k) { return !(k in o.inputs); }).map(function (k) { return '«' + String(H.label[k] || M.cells[D]['A' + k.slice(1)] || k) + '»'; });
+          msg.textContent = 'Проєкт відкрито. Його збережено в попередній версії калькулятора, тому розрахунок виконано заново за правилами версії ' + M.version +
+            ': цифри можуть відрізнятися від тих, що ви бачили раніше. Вхідні дані перенесено без змін.' +
+            (fresh.length === 1 ? ' Поле ' + fresh[0] + ', якого в попередній версії не було, отримало значення за замовчуванням. Перевірте його.' : fresh.length ? ' Поля, яких у попередній версії не було, отримали значення за замовчуванням: ' + fresh.join(', ') + '. Перевірте їх.' : '') +
+            ' Збережіть проєкт заново, щоб файл відповідав новій версії.';
+        }
       } catch (e) { msg.textContent = 'Це не файл проєкту калькулятора TCO.'; }
     };
     rd.readAsText(file);
