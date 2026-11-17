@@ -133,6 +133,7 @@ footer{max-width:1280px;margin:0 auto;padding:14px 20px 30px;color:var(--mut);fo
   <div id="tabmsg" class="banner warn" hidden></div>
   <div id="filemsg" class="small"></div>
   <section class="panel on" id="p_res">
+    <div id="roiwarn" class="banner warn" hidden></div>
     <div class="card">
       <p class="lede" id="dA14"></p>
       <p class="meta" id="dA15"></p>
@@ -2523,6 +2524,14 @@ window.TCO_HELP = {
     else if (lead && lead.pb === 'база') line15 = 'Лідер за TCO – сама база «' + base + '».';
     if (best && best !== lead) line15 += (line15 ? ' ' : '') + 'Найшвидше окупається ' + best.name + ': ' + dot(fmtPay(best.pb));
     document.getElementById('dA15').textContent = line15 || 'Жоден сценарій не окуплюється порівняно з базою «' + base + '» за 10 років.';
+    // нульова вартість простою: попередження про зміст окупності і ROI
+    var rw = document.getElementById('roiwarn');
+    if (!(dnum('B9') > 0) && !(dnum('B12') > 0)) {
+      rw.textContent = base === 'ДГ' ?
+        'Вартість години простою дорівнює нулю (поля 9 і 12). Окупність і ROI нижче показують лише економію на пальному, мережі й обслуговуванні порівняно з ДГ. Те, що сценарії по-різному захищають від простою, у них не потрапляє. Вкажіть реальні втрати об’єкта за годину без світла.' :
+        'Вартість години простою дорівнює нулю (поля 9 і 12). Відносно бази «' + base + '» резерв тоді нічого не заощаджує: модель бачить лише витрати, тому окупність і ROI нижче не мають сенсу. Вкажіть реальні втрати об’єкта за годину без світла.';
+      rw.hidden = false;
+    } else { rw.hidden = true; rw.textContent = ''; }
     // ключові припущення, від яких найбільше залежать окупність і ROI
     var ints = []; for (var y = 128; y <= 137; y++) ints.push(dnum('B' + y));
     var flat = ints.every(function (k) { return k >= 0.95; }), hrs = val(D, 'C19');
