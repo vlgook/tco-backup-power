@@ -139,6 +139,7 @@ footer{max-width:1280px;margin:0 auto;padding:14px 20px 30px;color:var(--mut);fo
       <p class="meta" id="dA2"></p>
       <p class="meta" id="dA3"></p>
       <p class="meta" id="dA16"></p>
+      <p class="meta" id="roiassume"></p>
       <p class="meta" id="modeline"></p>
     </div>
     <div class="card"><h2>Сім сценаріїв за 10 років</h2><div class="tblwrap"><table id="restable"></table></div><ul class="notes legend" id="reslegend"></ul></div>
@@ -1230,7 +1231,8 @@ window.TCO_HELP = {
     ['Потужність', 'чи витримають інвертор, батарея і генератор пікову потужність із пусковими струмами.'],
     ['Ємність УЗЕ', 'чи вистачає батареї на найдовше відключення в кінці її строку, з гарантованою часткою вітру і сонця з поля 104 (0% – штиль і ніч).'],
     ['Строк служби АКБ', 'через скільки років батарею доведеться міняти.'],
-    ['Окупність і ROI', 'порівняно з базою, обраною в полі 76; у сценарію, який є базою, стоїть «база».']
+    ['Окупність', 'за скільки місяців (або років) економія порівняно з базою з поля 76 повертає додаткові вкладення; у сценарію-бази стоїть «база».'],
+    ['ROI на всі інвестиції', 'чистий ефект за 10 років порівняно з базою, поділений на всі інвестиції сценарію. Відсоток на додаткові інвестиції (більший) – на вкладці «Деталі».']
   ]
 };
 </script>
@@ -2070,6 +2072,8 @@ window.TCO_HELP = {
 
   // ---------- графік доби ----------
   var METOD_APP = [
+    { t: 'Окупність і ROI в застосунку', b: 1 },
+    { t: 'На вкладці «Результат» окупність показано в місяцях (до двох років) або роках, а ROI – на всі інвестиції сценарію: чистий ефект за 10 років порівняно з базою, поділений на повну вартість обладнання сценарію. ROI на додаткові інвестиції, як в Excel-версії, є на вкладці «Деталі». Він завжди більший, бо ділиться лише на різницю в ціні з базою, і для дешевих сценаріїв легко сягає тисяч відсотків.' },
     { t: 'Де зберігаються дані', b: 1 },
     { t: 'Застосунок не має сервера: усе, що ви вводите, зберігається лише у вашому браузері на цьому комп’ютері, і інші користувачі цих даних не бачать. Браузер пам’ятає один, останній проєкт. Щоб вести кілька об’єктів, зберігайте кожен у файл кнопкою «Зберегти проєкт», а «Новий проєкт» починає наступний із даних прикладу. Якщо проєкт змінити в іншій вкладці цього ж браузера, застосунок попередить і запропонує обрати версію. Результат VAWT Advisor, відкритого кнопкою з проєкту, повертається саме в цей проєкт.' },
     { t: 'Режим «графік доби» (лише в застосунку)', b: 1 },
@@ -2469,19 +2473,62 @@ window.TCO_HELP = {
   }
 
   // ---------- результат, перевірки, деталі ----------
-  function drawResult() {
-    var head = '<tr>' + 'ABCDEFGHIJK'.split('').map(function (c) { return '<th>' + esc(txt(B, c + '5')) + '</th>'; }).join('') + '</tr>', body = '';
+  // окупність і ROI: ROI рахуємо на всі інвестиції сценарію (на додаткові – у «Деталях»), окупність показуємо в місяцях
+  function roiRows() {
+    var out = [];
     for (var r = 6; r <= 12; r++) {
-      var lead = val(B, 'D' + r) === 1;
+      var m = /TCO!F(\d+)/.exec(String(M.cells[B]['K' + r] || '')), tr = m ? +m[1] : 0;
+      var capex = val(B, 'B' + r), inc = tr ? val(T, 'C' + tr) : null, eff = tr ? val(T, 'D' + tr) : null, pb = tr ? val(T, 'E' + tr) : null, roiInc = tr ? val(T, 'F' + tr) : null;
+      var roiFull = typeof roiInc === 'number' && typeof eff === 'number' && typeof capex === 'number' && capex > 0 ? eff / capex : roiInc;
+      out.push({ r: r, name: txt(B, 'A' + r), capex: capex, inc: inc, eff: eff, pb: pb, roiInc: roiInc, roiFull: roiFull });
+    }
+    return out;
+  }
+  function fmtPay(v) {
+    if (typeof v !== 'number' || !isFinite(v)) return v === null || v === undefined ? '' : String(v);
+    if (v < 2) { var mo = Math.max(1, Math.round(v * 12)); return mo + ' міс.'; }
+    return String(Math.round(v * 10) / 10).replace('.', ',') + ' р.';
+  }
+  function fmtPct(v) { return typeof v === 'number' && isFinite(v) ? fmtVal(v, '0%') : (v === null || v === undefined ? '' : String(v)); }
+  function drawResult() {
+    var RR = roiRows(), HD = { J: 'Окупність', K: 'ROI на всі інвестиції' };
+    var head = '<tr>' + 'ABCDEFGHIJK'.split('').map(function (c) { return '<th>' + esc(HD[c] || txt(B, c + '5')) + '</th>'; }).join('') + '</tr>', body = '';
+    for (var r = 6; r <= 12; r++) {
+      var lead = val(B, 'D' + r) === 1, rr = RR[r - 6];
       body += '<tr' + (lead ? ' class="lead"' : '') + '>' + 'ABCDEFGHIJK'.split('').map(function (c) {
         var v = val(B, c + r), s = fmtVal(v, M.dash_fmt[c]), cls = typeof v === 'number' ? 'n' : '';
+        if (c === 'J') { v = rr.pb; s = fmtPay(v); cls = typeof v === 'number' ? 'n' : ''; }
+        if (c === 'K') { v = rr.roiFull; s = fmtPct(v); cls = typeof v === 'number' ? 'n' : ''; }
         if ((c === 'G' || c === 'H') && typeof v === 'string') cls = /Мало|Бракує/.test(v) ? 'bad' : (v === 'OK' ? 'ok' : '');
         return '<td class="' + cls + '">' + esc(s) + '</td>';
       }).join('') + '</tr>';
     }
     document.getElementById('restable').innerHTML = '<thead>' + head + '</thead><tbody>' + body + '</tbody>';
     document.getElementById('reslegend').innerHTML = H.dashLegend.map(function (p) { return '<li><b>' + esc(p[0]) + '</b> – ' + esc(p[1]) + '</li>'; }).join('');
-    ['A2', 'A3', 'A14', 'A15', 'A16'].forEach(function (a) { document.getElementById('d' + a).textContent = txt(B, a); });
+    ['A2', 'A3', 'A14', 'A16'].forEach(function (a) { document.getElementById('d' + a).textContent = txt(B, a); });
+    // речення про окупність: найшвидший сценарій, без «тисяч відсотків» на першому плані
+    var base = txt(D, 'B76'), best = null, lead = null;
+    RR.forEach(function (x) {
+      if (typeof x.pb === 'number' && isFinite(x.pb) && (!best || x.pb < best.pb)) best = x;
+      if (val(B, 'D' + x.r) === 1) lead = x;
+    });
+    var mln = function (v) { return String(Math.round(v / 1e5) / 10).replace('.', ',') + ' млн грн'; };
+    var dot = function (t) { return /\.$/.test(t) ? t : t + '.'; };
+    var line15 = '';
+    if (lead && typeof lead.pb === 'number' && isFinite(lead.pb))
+      line15 = 'Лідер за TCO, ' + lead.name + ', порівняно з базою «' + base + '» окупається за ' + dot(fmtPay(lead.pb)) +
+        ' За 10 років він дає ' + mln(lead.eff) + ' чистого ефекту на ' + mln(lead.capex) + ' інвестицій.';
+    else if (lead && lead.pb === 'база') line15 = 'Лідер за TCO – сама база «' + base + '».';
+    if (best && best !== lead) line15 += (line15 ? ' ' : '') + 'Найшвидше окупається ' + best.name + ': ' + dot(fmtPay(best.pb));
+    document.getElementById('dA15').textContent = line15 || 'Жоден сценарій не окуплюється порівняно з базою «' + base + '» за 10 років.';
+    // ключові припущення, від яких найбільше залежать окупність і ROI
+    var ints = []; for (var y = 128; y <= 137; y++) ints.push(dnum('B' + y));
+    var flat = ints.every(function (k) { return k >= 0.95; }), hrs = val(D, 'C19');
+    document.getElementById('roiassume').textContent = 'Окупність і ROI найбільше залежать від трьох припущень: світла немає в середньому ' +
+      (typeof hrs === 'number' ? String(Math.round(hrs * 10) / 10).replace('.', ',') : '–') + ' год на добу' +
+      (flat ? ' всі 10 років без зменшення' : ' з інтенсивністю по роках із полів 128–137') + '; дизель ' + fmtVal(dnum('B28'), '#,##0') + ' грн/л із ростом ' + fmtVal(dnum('B29'), '0%') +
+      ' на рік; година простою ' + fmtVal(dnum('B9'), '#,##0') + ' / ' + fmtVal(dnum('B12'), '#,##0') + ' грн.' +
+      (flat ? ' Якщо графіки відключень слабшатимуть, задайте це в полях 128–137: ефект зменшиться.' : '');
     document.getElementById('objname').textContent = txt(D, 'B5'); document.getElementById('objname').title = txt(D, 'B5');
     document.getElementById('modeline').textContent = (sched.mode === 'schedule' ? 'Режим розрахунку: графік доби (' + sched.types.map(function (t) { return t.name; }).join(', ') + ').' : 'Режим розрахунку: частки пікових і світлих годин (за умовчанням).') + ' Схід і захід сонця: ' + (locValid(loc) ? coord(loc.lat) + ', ' + coord(loc.lon) + '.' : 'Київ (за умовчанням).');
   }
@@ -2575,7 +2622,13 @@ window.TCO_HELP = {
     document.getElementById('t_sum').innerHTML = rangeTable(R, seq(36, 64).concat([87]), ['A'].concat(COLS), function (r, c, v) { var f = M.sumfmt[r]; return f && f !== 'General' ? f : (Math.abs(v) >= 100 ? '#,##0' : '#,##0.00'); }, 36);
     document.getElementById('t_cum').innerHTML = rangeTable(T, [4, 5], ['A'].concat(YC), function (r) { return r === 5 ? '0%' : '0'; }, 4) + rangeTable(T, seq(106, 112), ['B'].concat(YC), money);
     document.getElementById('t_str').innerHTML = rangeTable(T, seq(115, 122), ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'], money, 115);
-    document.getElementById('t_roi').innerHTML = rangeTable(T, seq(146, 153), ['B', 'C', 'D', 'E', 'F'], function (r, c, v) { return c === 'F' ? '0%' : c === 'E' ? '0.0' : '#,##0'; }, 146);
+    var RR = roiRows();
+    document.getElementById('t_roi').innerHTML = '<thead><tr><th>Сценарій</th><th>Інвестиції сценарію, грн</th><th>Додаткові інвестиції порівняно з базою, грн</th>' +
+      '<th>Чистий ефект за 10 років з залишковою вартістю, грн</th><th>Окупність</th><th>ROI на всі інвестиції</th><th>ROI на додаткові інвестиції</th></tr></thead><tbody>' +
+      RR.map(function (x) {
+        var n = function (v) { return typeof v === 'number' ? '<td class="n">' + esc(fmtVal(v, '#,##0')) + '</td>' : '<td>' + esc(v === null || v === undefined ? '' : String(v)) + '</td>'; };
+        return '<tr><td>' + esc(x.name) + '</td>' + n(x.capex) + n(x.inc) + n(x.eff) + '<td class="n">' + esc(fmtPay(x.pb)) + '</td><td class="n">' + esc(fmtPct(x.roiFull)) + '</td><td class="n">' + esc(fmtPct(x.roiInc)) + '</td></tr>';
+      }).join('') + '</tbody>';
   }
   function refresh() {
     document.querySelectorAll('[data-cell]').forEach(function (el) {
