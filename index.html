@@ -97,6 +97,7 @@ select.inp{text-align:left;width:auto;min-width:120px}
 #t_cum tr>*:first-child{position:sticky;left:0;background:var(--card,#fff);z-index:1}#t_cum tr.head>*:first-child{background:#e9edf2}
 #roiwarn.mute{display:none}
 .meta,.lede,#dA2,#filemsg,header .sub,#objname,td,th,.rownote,.hint{overflow-wrap:anywhere}
+.thsub{font-weight:400;font-size:11.5px;color:#55606d}
 .howto{margin:0 0 10px;font-size:13.5px}.howto a{color:var(--acc);font-weight:600}
 #metod{max-width:860px}#metod h3{margin:18px 0 6px;font-size:15px}#metod p{margin:0 0 8px}
 .small{font-size:12.5px;color:var(--mut)}
@@ -1270,7 +1271,7 @@ window.TCO_HELP = {
     ['Простій', 'години на рік, коли об’єкт без живлення попри резерв.'],
     ['Паливо', 'літрів дизпалива на рік.'],
     ['Потужність', 'чи витримають інвертор, батарея і генератор пікову потужність із пусковими струмами.'],
-    ['Ємність УЗЕ', 'чи вистачає батареї на найдовше відключення наприкінці її строку служби. Вітер і сонце тут враховано лише в гарантованій частці (поле «Гарантована частка вітру і сонця в найгірше відключення»); за замовчуванням це 0%, тобто ніч і штиль, тому більша річна генерація цю колонку не змінює. Нестачу закривають додаткові батарейні модулі або ДГ у сценарії.'],
+    ['Ємність УЗЕ на найгірше відключення', 'не щорічна нестача, а перевірка одного найгіршого відключення: найдовшого з таблиці сезонів, у його сезоні, з батареєю наприкінці строку служби. «Бракує 52 кВт·год» означає, що саме в таке відключення батареї забракне 52 кВт·год і об’єкт частину часу стоятиме. Річні години простою з усіх відключень показує колонка «Простій». Вітер і сонце тут враховано лише в гарантованій частці (поле «Гарантована частка вітру і сонця в найгірше відключення»); за замовчуванням це 0%, тобто ніч і штиль, тому більша річна генерація цю колонку не змінює. Нестачу закривають додаткові батарейні модулі або ДГ у сценарії.'],
     ['Строк служби АКБ', 'через скільки років батарею доведеться міняти.'],
     ['Окупність', 'за скільки місяців (або років) економія порівняно з базою з поля «З чим порівнювати окупність» повертає додаткові вкладення; у сценарію-бази стоїть «база».'],
     ['ROI на всі інвестиції', 'чистий ефект за горизонт розрахунку порівняно з базою, поділений на всі інвестиції сценарію. Відсоток на додаткові інвестиції (більший) – на вкладці «Деталі».']
@@ -2585,8 +2586,13 @@ window.TCO_HELP = {
   function fmtPct(v) { return typeof v === 'number' && isFinite(v) ? fmtVal(v, '0%') : (v === null || v === undefined ? '' : String(v)); }
   function drawResult() {
     var DR = dnum('B90'), disc = DR > 0, CL = (disc ? 'ABCNDEFGHIJK' : 'ABCDEFGHIJK').split('');
-    var GS = dnum('B104'), RR = roiRows(), HD = { H: GS > 0 ? 'Ємність УЗЕ (вітер і сонце: ' + fmtVal(GS, '0.#%') + ' гарантовано)' : 'Ємність УЗЕ (без вітру і сонця)', J: 'Окупність', K: 'ROI на всі інвестиції', N: 'TCO, NPV при ' + fmtVal(DR, '0.#%') + ', грн' };
-    var head = '<tr>' + CL.map(function (c) { return '<th>' + esc(HD[c] || txt(B, c + '5')) + '</th>'; }).join('') + '</tr>', body = '';
+    var GS = dnum('B104'), RR = roiRows();
+    // найгірше відключення: найдовше з таблиці сезонів, батарея наприкінці строку служби
+    var WS = ['15', '16', '17', '18'].reduce(function (b, r) { return dnum('D' + r) > dnum('D' + b) ? r : b; }, '15');
+    var WC = fmtVal(dnum('D' + WS), '#,##0.#') + ' год, ' + String(txt(D, 'A' + WS)).split(' ')[0].toLowerCase() + ', АКБ ' + fmtVal(dnum('B119'), '0%') + ' ємності' + (GS > 0 ? ', вітер і сонце ' + fmtVal(GS, '0.#%') : ', без вітру і сонця');
+    var WT = 'Не щорічна нестача, а запас на одне найгірше відключення: ' + WC + '.';
+    var HD = { H: 'Ємність УЗЕ на найгірше відключення', J: 'Окупність', K: 'ROI на всі інвестиції', N: 'TCO, NPV при ' + fmtVal(DR, '0.#%') + ', грн' };
+    var head = '<tr>' + CL.map(function (c) { return c === 'H' ? '<th title="' + esc(WT) + '">' + esc(HD.H) + '<br><small class="thsub">' + esc(WC) + '</small></th>' : '<th>' + esc(HD[c] || txt(B, c + '5')) + '</th>'; }).join('') + '</tr>', body = '';
     for (var r = 6; r <= 12; r++) {
       var lead = val(B, 'D' + r) === 1, rr = RR[r - 6];
       body += '<tr' + (lead ? ' class="lead"' : '') + '>' + CL.map(function (c) {
@@ -2594,7 +2600,7 @@ window.TCO_HELP = {
         if (c === 'J') { v = rr.pb; s = fmtPay(v); cls = typeof v === 'number' ? 'n' : ''; }
         if (c === 'K') { v = rr.roiFull; s = fmtPct(v); cls = typeof v === 'number' ? 'n' : ''; }
         if ((c === 'G' || c === 'H') && typeof v === 'string') cls = /Мало|Бракує/.test(v) ? 'bad' : (v === 'OK' ? 'ok' : '');
-        return '<td class="' + cls + '">' + esc(s) + '</td>';
+        return '<td class="' + cls + '"' + (c === 'H' && /Бракує|покриває/.test(s) ? ' title="' + esc(WT) + '"' : '') + '>' + esc(s) + '</td>';
       }).join('') + '</tr>';
     }
     document.getElementById('restable').innerHTML = '<thead>' + head + '</thead><tbody>' + body + '</tbody>';
