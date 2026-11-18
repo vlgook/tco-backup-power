@@ -26,10 +26,12 @@ def start(b, vw=(1400, 1000)):
     pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.on('console', lambda m: errs.append('console:' + m.text) if m.type == 'error' and '404' not in m.text and 'Failed to load resource' not in m.text else None)
     pg.goto(URL); pg.wait_for_timeout(1200)
-    if pg.locator('#startok').is_visible(): pg.click('#startok')
+    if pg.locator('#startok').is_visible():
+        R.append(('стартове вікно ставить фокус на кнопку', pg.evaluate("document.activeElement.id") == 'startok', ''))
+        pg.click('#startok')
     return ctx, pg, errs
 def setv(pg, a, v):
-    pg.click('[data-tab="p_in"]'); el = pg.locator(f'[data-in="{a}"]')
+    pg.click('[data-tab="p_in"]'); pg.evaluate("document.querySelectorAll('details.blk').forEach(d=>d.open=true)"); el = pg.locator(f'[data-in="{a}"]')
     if el.evaluate('e=>e.tagName') == 'SELECT': el.select_option(label=str(v))
     else: el.fill(str(v)); el.press('Tab')
     pg.wait_for_timeout(500)
@@ -150,6 +152,54 @@ with sync_playwright() as p:
     pg.set_input_files('#file', f); pg.wait_for_timeout(800)
     m = pg.locator('#filemsg').inner_text()
     ok('файл попередньої версії: пояснення і нове поле', 'попередній версії' in m and '«Горизонт розрахунку»' in m, m[:120])
+    # 15 QA 6.0: межі правдоподібності й неможливі значення
+    def errs_of():
+        return pg.evaluate("Array.from(document.querySelectorAll('#checktable tbody tr')).filter(r=>r.classList.contains('err')||r.classList.contains('warn')).map(r=>r.cells[0].textContent+'|'+(r.classList.contains('err')?'E':'W'))")
+    pg.click('#breset'); pg.click('.newopt[data-new=demo]'); pg.wait_for_timeout(500)
+    ok('тестовий приклад без помилок і попереджень', errs_of() == [], str(errs_of()))
+    for a, v, name, lvl in [('B45', '50', 'Ресурс батареї в циклах', 'E'), ('B30', '1', 'Інтервал ТО генератора', 'E'),
+                            ('B33', '10', 'Ресурс ДГ до капремонту', 'E'), ('B122', '1000', 'Власне споживання інвертора', 'W'),
+                            ('B126', '0,01', 'Підвезення пального частіше ніж двічі на добу', 'W'), ('B106', '400', 'Блекаути довші за рік', 'E')]:
+        old = pg.locator(f'[data-in="{a}"]').input_value(); setv(pg, a, v)
+        ok(f'неправдоподібне {a}={v} → {name}', any(x == name + '|' + lvl for x in errs_of()), str(errs_of()))
+        setv(pg, a, old)
+    old = pg.locator('[data-in="B114"]').input_value(); setv(pg, 'B114', '95')
+    ok('поріг заміни АКБ вище гарантії → попередження', any(x.startswith('Заміна батареї раніше за гарантію') for x in errs_of())); setv(pg, 'B114', old)
+    olds = [pg.locator(f'[data-in="B{r}"]').input_value() for r in (15, 16, 17, 18)]
+    for r in (15, 16, 17, 18): setv(pg, f'B{r}', '30')
+    ok('сума днів сезонів 120 → помилка, результат схований', any(x == 'Сума днів сезонів|E' for x in errs_of()) and pg.locator('#resbody').is_hidden())
+    pg.click('[data-tab="p_det"]'); ok('при помилках «Деталі» теж сховані', pg.locator('#detbody').is_hidden() and pg.locator('#detempty').is_visible())
+    for r, v in zip((15, 16, 17, 18), olds): setv(pg, f'B{r}', v)
+    # одиниці й роздільники в полях
+    for v, exp in [('500 000 грн', '500000'), ('1.000,5', '1000,5'), ('1,000.5', '1000,5'), ('550000', '550000')]:
+        setv(pg, 'B24', v); got = re.sub(r'\s', ' ', pg.locator('[data-in="B24"]').input_value())
+        ok(f'поле приймає «{v}»', got == exp and not any(x.startswith('Параметри ДГ') for x in errs_of()), got)
+    setv(pg, 'B24', 'abc')
+    ok('текст у полі: помилка без хибного «ціна 0» і з aria-invalid', not any('дорівнює 0' in x for x in errs_of()) and pg.locator('[data-in="B24"]').get_attribute('aria-invalid') == 'true')
+    setv(pg, 'B24', '550000')
+    # діалоги і клавіатура
+    pg.click('#breset'); seq = []
+    for i in range(6): pg.keyboard.press('Tab'); seq.append(pg.evaluate("!!document.activeElement.closest('#newdlg')"))
+    ok('фокус не виходить за межі вікна «Новий проєкт»', all(seq)); pg.keyboard.press('Escape')
+    pg.focus('.tabs button[data-tab=p_res]'); pg.keyboard.press('ArrowRight')
+    ok('вкладки перемикаються стрілками', pg.locator('#p_in').is_visible())
+    # файли: новіша версія, сміття в списку, налаштування панелей
+    with pg.expect_download() as d: pg.click('#bsave')
+    good = json.load(open(d.value.path())); tmp = tempfile.mkdtemp()
+    o = json.loads(json.dumps(good)); o['model'] = '99.0'; f1 = os.path.join(tmp, 'new.json'); json.dump(o, open(f1, 'w'))
+    pg.set_input_files('#file', f1); pg.wait_for_timeout(600)
+    ok('файл новішої версії: окреме повідомлення', 'новішій версії' in pg.locator('#filemsg').inner_text())
+    o = json.loads(json.dumps(good)); o['inputs']['B65'] = 25; o['pvset'] = {'tilt': 'x', 'az': None, 'pr': -1}; f2 = os.path.join(tmp, 'bad.json'); json.dump(o, open(f2, 'w'))
+    pg.set_input_files('#file', f2); pg.wait_for_timeout(600)
+    ok('зіпсовані налаштування панелей → типові 35°/0°/80%', pg.evaluate("JSON.stringify([...document.querySelectorAll('#loc input')].map(i=>i.value).filter(Boolean))").find('35') >= 0)
+    pg.wait_for_timeout(5000); g2 = os.path.join(tmp, 'good.json'); json.dump(good, open(g2, 'w'))
+    pg.set_input_files('#file', g2); pg.wait_for_timeout(1500)
+    ok('невірне значення не лишається у списку горизонту', pg.evaluate("document.querySelectorAll('[data-in=\"B65\"] option').length") == 11)
+    ok('повідомлення не стирає таймер попереднього файлу', pg.locator('#filemsg').inner_text() != '')
+    # довге слово в назві
+    setv(pg, 'B5', 'Я' * 400); pg.click('[data-tab="p_res"]'); pg.wait_for_timeout(300)
+    ok('назва з 400 символів без пробілів не розширює сторінку', pg.evaluate('document.documentElement.scrollWidth') <= 1400)
+    setv(pg, 'B5', 'Тест')
     ok('немає помилок JS', not errs, str(errs[:3]))
     ctx.close()
     # 14 мобільний
