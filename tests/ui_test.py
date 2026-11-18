@@ -200,6 +200,25 @@ with sync_playwright() as p:
     setv(pg, 'B5', 'Я' * 400); pg.click('[data-tab="p_res"]'); pg.wait_for_timeout(300)
     ok('назва з 400 символів без пробілів не розширює сторінку', pg.evaluate('document.documentElement.scrollWidth') <= 1400)
     setv(pg, 'B5', 'Тест')
+    # 16 частка вітру з погодинних даних (Open-Meteo підмінено синтетичним рядом)
+    import math, random
+    random.seed(1); st = 1420070400; tt = []; vv = []; x = 0
+    for i in range(87672):
+        x = 0.97 * x + 0.5 * (random.random() - 0.5) * 2; tt.append(st + i * 3600); vv.append(max(0, round(5 + 2.2 * x + 0.8 * math.sin(i / 24 * 2 * math.pi), 2)))
+    wbody = json.dumps({'hourly': {'time': tt, 'wind_speed_10m': vv}})
+    pg.route('**/archive-api.open-meteo.com/**', lambda r: r.fulfill(status=200, content_type='application/json', body=wbody) if 'wind_speed' in r.request.url else r.abort())
+    pg.click('#breset'); pg.click('.newopt[data-new=demo]'); pg.wait_for_timeout(500)
+    pg.click('[data-tab="p_in"]'); pg.evaluate("document.querySelectorAll('details.blk').forEach(d=>d.open=true)")
+    ok('кнопка частки вітру неактивна без локації', pg.locator('#wget').is_disabled())
+    pg.fill('#llat', '50,45'); pg.press('#llat', 'Tab'); pg.fill('#llon', '30,52'); pg.press('#llon', 'Tab'); pg.wait_for_timeout(800)
+    pg.click('#wget'); pg.wait_for_timeout(3000)
+    wv = pg.input_value('[data-in="B57"]')
+    ok('частка вітру розрахована і записана в поле', wv not in ('', '0') and 'У 9 із 10' in pg.locator('#wmsg').inner_text(), wv)
+    pg.click('[data-tab="p_res"]')
+    ok('заголовок «Ємність УЗЕ» показує частку вітру', ('вітер ' + wv + '%') in pg.locator('#restable thead').inner_text())
+    setv(pg, 'B57', '100'); pg.click('[data-tab="p_res"]')
+    ok('частка вітру 100% зменшує нестачу (52 → 37 кВт·год)', 'Бракує 37 кВт·год' in pg.locator('#restable').inner_text())
+    setv(pg, 'B57', '0'); pg.unroute('**/archive-api.open-meteo.com/**')
     ok('немає помилок JS', not errs, str(errs[:3]))
     ctx.close()
     # 14 мобільний
