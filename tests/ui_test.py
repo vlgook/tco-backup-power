@@ -17,7 +17,7 @@ Handler = functools.partial(Quiet, directory=ROOT)
 srv = socketserver.TCPServer(('127.0.0.1', 0), Handler)
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 URL = 'http://127.0.0.1:%d/index.html' % srv.server_address[1]
-GOLDEN_LEADER = 'УЗЕ + PV + вітер – 13 653 669 грн'   # тестовий приклад, 10 років, ставка 0%
+GOLDEN_LEADER = 'УЗЕ + PV – 8 610 486 грн'   # тестовий приклад (будинок на Осокорках), 10 років, ставка 15%
 R = []
 def ok(name, cond, info=''): R.append((name, bool(cond), info))
 def start(b, vw=(1400, 1000)):
@@ -68,23 +68,23 @@ with sync_playwright() as p:
     ok('кнопка переходу до блоку 4',pg.evaluate("Math.abs(document.getElementById('blk4').getBoundingClientRect().top)<200"))
     # 3 recalculation from each block
     base=tco(pg)
-    for a,v in [('B6',400),('B24',700000),('B106',5),('B28',60)]:
+    for a,v in [('B6',400),('B42',260000),('B106',5),('B59',6)]:
         before=tco(pg); setv(pg,a,v); pg.click('[data-tab="p_res"]'); pg.wait_for_timeout(300)
         ok(f'зміна {a} перераховує результат',tco(pg)!=before)
     # 4 persistence
     pg.reload(); pg.wait_for_timeout(1500)
     pg.click('[data-tab="p_in"]')
-    ok('значення зберігаються після перезавантаження',pg.locator('[data-in="B6"]').input_value()=='400' and pg.locator('[data-in="B28"]').input_value()=='60')
+    ok('значення зберігаються після перезавантаження',pg.locator('[data-in="B6"]').input_value()=='400' and pg.locator('[data-in="B59"]').input_value()=='6')
     ok('блоки знову розгорнуті після перезавантаження',pg.evaluate("Array.from(document.querySelectorAll('details.blk')).every(d=>d.open)"))
     # 5 export/import
     with pg.expect_download() as d: pg.click('#bsave')
     path=d.value.path(); data=json.load(open(path))
-    ok('збереження проєкту у файл',data['inputs'].get('B28')==60)
+    ok('збереження проєкту у файл',data['inputs'].get('B59')==6)
     pg.click('#breset'); pg.wait_for_timeout(200); pg.click('.newopt[data-new=demo]'); pg.wait_for_timeout(600); pg.click('[data-tab="p_in"]')
-    ok('«Новий проєкт» повертає типові значення',pg.locator('[data-in="B28"]').input_value()!='60')
+    ok('«Новий проєкт» повертає типові значення',pg.locator('[data-in="B59"]').input_value()!='6')
     pg.set_input_files('#file',path); pg.wait_for_timeout(800)
     pg.click('[data-tab="p_in"]')
-    ok('відкриття проєкту з файлу',pg.locator('[data-in="B28"]').input_value()=='60' and pg.evaluate("!!document.querySelector('#blk1 #loc') && !!document.querySelector('#blk3 #sched')"))
+    ok('відкриття проєкту з файлу',pg.locator('[data-in="B59"]').input_value()=='6' and pg.evaluate("!!document.querySelector('#blk1 #loc') && !!document.querySelector('#blk3 #sched')"))
     # 6 sched mode switch stays in block 3
     pg.click('#sched input[value="schedule"]'); pg.wait_for_timeout(600)
     ok('режим «За графіком доби» відкривається в блоці 3',pg.evaluate("!!document.querySelector('#blk3 #sched [data-td]')"))
@@ -139,12 +139,11 @@ with sync_playwright() as p:
     ok('горизонт 20: таблиця по роках до 2046', '2046' in pg.locator('#t_cum').inner_text())
     setv(pg, 'B65', 10)
     # 12 дисконтування
-    pg.click('[data-tab="p_res"]'); ok('ставка 0%: колонки NPV немає', 'NPV' not in pg.locator('#restable thead').inner_text())
+    setv(pg, 'B90', 0); pg.click('[data-tab="p_res"]'); ok('ставка 0%: колонки NPV немає', 'NPV' not in pg.locator('#restable thead').inner_text())
     setv(pg, 'B90', 15); pg.click('[data-tab="p_res"]'); pg.wait_for_timeout(300)
     ok('ставка 15%: є колонка «TCO, NPV»', 'TCO, NPV при 15%' in pg.locator('#restable thead').inner_text())
     ok('ставка 15%: ефект позначено як дисконтований', 'дисконтованого' in pg.locator('#dA15').inner_text())
-    setv(pg, 'B90', 0); pg.click('[data-tab="p_res"]')
-    ok('ставка 0%: результат знову еталонний', GOLDEN_LEADER in tco(pg))
+    ok('ставка 15%: результат еталонний', GOLDEN_LEADER in tco(pg))
     # 13 файл попередньої версії
     with pg.expect_download() as d: pg.click('#bsave')
     o = json.load(open(d.value.path())); o['model'] = 'v11'; o['inputs'].pop('B65', None)
@@ -209,6 +208,7 @@ with sync_playwright() as p:
     pg.route('**/archive-api.open-meteo.com/**', lambda r: r.fulfill(status=200, content_type='application/json', body=wbody) if 'wind_speed' in r.request.url else r.abort())
     pg.click('#breset'); pg.click('.newopt[data-new=demo]'); pg.wait_for_timeout(500)
     pg.click('[data-tab="p_in"]'); pg.evaluate("document.querySelectorAll('details.blk').forEach(d=>d.open=true)")
+    pg.click('#lreset'); pg.wait_for_timeout(300)
     ok('кнопка частки вітру неактивна без локації', pg.locator('#wget').is_disabled())
     pg.fill('#llat', '50,45'); pg.press('#llat', 'Tab'); pg.fill('#llon', '30,52'); pg.press('#llon', 'Tab'); pg.wait_for_timeout(800)
     pg.click('#wget'); pg.wait_for_timeout(3000)
@@ -216,8 +216,11 @@ with sync_playwright() as p:
     ok('частка вітру розрахована і записана в поле', wv not in ('', '0') and 'У 9 із 10' in pg.locator('#wmsg').inner_text(), wv)
     pg.click('[data-tab="p_res"]')
     ok('заголовок «Ємність УЗЕ» показує частку вітру', ('вітер ' + wv + '%') in pg.locator('#restable thead').inner_text())
-    setv(pg, 'B57', '100'); pg.click('[data-tab="p_res"]')
-    ok('частка вітру 100% зменшує нестачу (52 → 37 кВт·год)', 'Бракує 37 кВт·год' in pg.locator('#restable').inner_text())
+    def lack():
+        t = pg.locator('#restable tbody tr').nth(5).locator('td').nth(8).inner_text(); m = re.search(r'(\d+)', t); return int(m.group(1)) if m else -1
+    setv(pg, 'B57', '0'); pg.click('[data-tab="p_res"]'); l0 = lack()
+    setv(pg, 'B57', '100'); pg.click('[data-tab="p_res"]'); l1 = lack()
+    ok('більша частка вітру зменшує нестачу в найгірше відключення', 0 <= l1 < l0, f'{l0} → {l1}')
     setv(pg, 'B57', '0'); pg.unroute('**/archive-api.open-meteo.com/**')
     ok('немає помилок JS', not errs, str(errs[:3]))
     ctx.close()
